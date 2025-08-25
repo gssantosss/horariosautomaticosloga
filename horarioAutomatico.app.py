@@ -44,10 +44,17 @@ if uploaded_file:
 
             # Ordena pelo número da ordem
             subset = subset.sort_values(by=ordem_col)
-
-            inicio = pd.to_datetime(subset[horario_col].min())
-            fim = pd.to_datetime(subset[horario_col].max())
-
+            
+            # Converte todos os horários da coluna para datetime (baseado no mesmo dia fictício)
+            subset[horario_col] = subset[horario_col].apply(
+                lambda t: pd.to_datetime(str(t), format="%H:%M:%S")
+                if pd.notnull(t) else pd.NaT
+            )
+            
+            # Agora sim pega o início e fim
+            inicio = subset[horario_col].min()
+            fim = subset[horario_col].max()
+            
             total_itens = len(subset)
             if total_itens <= 1:
                 continue
@@ -84,3 +91,4 @@ if uploaded_file:
         data=output,
         file_name="planilha_ajustada.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
