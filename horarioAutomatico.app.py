@@ -14,7 +14,7 @@ uploaded_file = st.file_uploader("📂 Carregue aqui sua planilha em Excel (.xls
 
 # Input do tempo mínimo de pausa
 pause_threshold = st.number_input(
-    "Tempo mínimo de pausa (minutos)", 
+    "Considerar pausas a partir de: (minutos)", 
     min_value=1, max_value=120, value=10
 )
 
@@ -84,4 +84,3 @@ if uploaded_file:
         data=output,
         file_name="planilha_ajustada.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
