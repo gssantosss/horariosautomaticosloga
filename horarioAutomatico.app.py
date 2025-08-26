@@ -47,15 +47,19 @@ if uploaded_file:
             if total_itens <= 1:
                 continue
 
+            # Intervalo uniforme entre início e fim
             intervalo_base = (fim - inicio) / (total_itens - 1)
 
-            # Gera os novos horários
+            # Gera os novos horários distribuídos uniformemente
             horarios = [inicio]
             for i in range(1, total_itens):
-                proximo = horarios[-1] + intervalo_base
+                proximo = inicio + intervalo_base * i  # distribuição uniforme
+
+                # Se houver gap maior que o limite, mantém esse gap
                 gap_original = subset[horario_col].iloc[i] - subset[horario_col].iloc[i-1]
                 if gap_original >= timedelta(minutes=pause_threshold):
                     proximo = horarios[-1] + gap_original
+
                 horarios.append(proximo)
 
             # Atualiza no DF final
