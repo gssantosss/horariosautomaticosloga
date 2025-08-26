@@ -1,96 +1,74 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
-from io import BytesIO
+import numpy as np
+import io
+import os
 
-st.set_page_config(page_title="Ajuste de Horários", layout="wide")
-
-st.title("Ajuste de Horários de Coleta")
-
-st.write("Faça upload da planilha, os horários serão ajustados automaticamente.")
+st.title("🕐 Correção de Horários de Coleta")
 
 # Upload do arquivo
-uploaded_file = st.file_uploader("📂 Carregue aqui sua planilha em Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Carregue aqui a planilha Excel (.xlsx)", type=["xlsx", "xls"])
 
-# Input do tempo mínimo de pausa
-pause_threshold = st.number_input(
-    "Considerar pausas a partir de: (minutos)", 
-    min_value=1, max_value=120, value=10
-)
+# Configuração do limite de gap
+limite_gap = st.number_input("Defina o limite máximo de gap (em minutos)", min_value=1, value=10, step=1)
 
 if uploaded_file:
+    # Lê o arquivo
     df = pd.read_excel(uploaded_file)
 
-    st.subheader("📊 Pré-visualização dos dados originais")
+    st.subheader("📋 Pré-visualização dos dados originais")
     st.dataframe(df.head())
 
-    # Copia para trabalhar
-    new_df = df.copy()
+    # Garante que a coluna "HORARIO" esteja no formato datetime
+    if "HORARIO" not in df.columns:
+        st.error("A planilha precisa ter uma coluna chamada 'HORARIO'")
+    else:
+        df["HORARIO"] = pd.to_datetime(df["HORARIO"], errors="coerce")
 
-    # Loop em todos os pares ORDEM/HORARIO
-    for col in df.columns:
-        if col.startswith("ORDEM"):
-            dia = col.replace("ORDEM", "")
-            ordem_col = col
-            horario_col = f"HORARIO{dia}"
+        # Ordena internamente os horários (não altera a ordem da planilha original)
+        horarios_ordenados = df["HORARIO"].dropna().sort_values().reset_index(drop=True)
 
-            if horario_col not in df.columns:
-                continue  # se não tiver coluna HORARIO correspondente, pula
+        # Calcula diferenças
+        diffs = horarios_ordenados.diff().dt.total_seconds().div(60)
 
-            # Subset de ordem + horário
-            subset = df[[ordem_col, horario_col]].dropna().copy()
-            if subset.empty:
-                continue
+        # Encontra onde tem gaps
+        gaps = diffs > limite_gap
 
-            # Ordena pelo número da ordem
-            subset = subset.sort_values(by=ordem_col)
-            
-            # Converte todos os horários da coluna para datetime
-            subset[horario_col] = pd.to_datetime(subset[horario_col].astype(str), errors="coerce")
-        
-            # Agora sim pega o início e fim
-            inicio = subset[horario_col].min()
-            fim = subset[horario_col].max()
-        
-            # Ajusta virada de dia (ex: 01:30 depois de 19:00)
-            subset[horario_col] = subset[horario_col].apply(
-                lambda x: x + timedelta(days=1) if x < inicio else x)
-            
-            total_itens = len(subset)
-            if total_itens <= 1:
-                continue
+        # Corrige horários bugados entre gaps
+        horarios_corrigidos = horarios_ordenados.copy()
+        start = 0
+        for i, gap in enumerate(gaps):
+            if gap:
+                end = i  # posição do último antes do gap
+                # corrige somente os miolos (mantém start e end fixos)
+                if end - start > 2:  
+                    bloco = horarios_ordenados[start:end+1]
+                    novos = pd.Series(pd.date_range(start=bloco.iloc[0], end=bloco.iloc[-1], periods=len(bloco)))
+                    horarios_corrigidos[start+1:end] = novos[1:-1].values
+                start = end
 
-            intervalo_base = (fim - inicio) / (total_itens - 1)
+        # Substitui no df original sem mudar ordem
+        df_corrigido = df.copy()
+        idx_ordenados = df["HORARIO"].dropna().sort_values().index
+        df_corrigido.loc[idx_ordenados, "HORARIO"] = horarios_corrigidos.values
 
-            # Gera os novos horários
-            horarios = [inicio]
-            for i in range(1, total_itens):
-                proximo = horarios[-1] + intervalo_base
+        st.subheader("📋 Dados corrigidos")
+        st.dataframe(df_corrigido.head())
 
-                gap_original = (
-                    pd.to_datetime(subset[horario_col].iloc[i]) 
-                    - pd.to_datetime(subset[horario_col].iloc[i-1])
-                )
-                if gap_original >= timedelta(minutes=pause_threshold):
-                    proximo = horarios[-1] + gap_original
+        # Monta nome do arquivo
+        nome_original = uploaded_file.name
+        nome_corrigido = os.path.splitext(nome_original)[0] + "_corrigido.xlsx"
 
-                horarios.append(proximo)
+        # Salva em buffer
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_corrigido.to_excel(writer, index=False)
+        st.download_button("⬇️ Baixar planilha corrigida", 
+                           data=output.getvalue(),
+                           file_name=nome_corrigido,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-            # Atualiza no DF final (só a coluna de horário, não mexe na ordem)
-            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]
+    
 
-    st.subheader("✅ Dados ajustados")
-    st.dataframe(new_df.head())
-
-    # Botão para baixar
-    output = BytesIO()
-    new_df.to_excel(output, index=False, engine="openpyxl")
-    output.seek(0)
-
-    st.download_button(
-        label="📥 Baixar planilha ajustada",
-        data=output,
-        file_name="planilha_ajustada.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
