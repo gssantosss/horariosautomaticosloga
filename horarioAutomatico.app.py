@@ -1,22 +1,32 @@
 import streamlit as st
 import pandas as pd
-import io
-import os
+from datetime import datetime, timedelta
+from io import BytesIO
 
-st.title("🕒Correção Automática de Horários")
+st.set_page_config(page_title="Ajuste de Horários", layout="wide")
 
-uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
+st.title("🕒 Ajuste Automático de Horários da Coleta")
 
-# Configuração do limite de gap
-limite_gap = st.number_input("Defina o limite máximo de gap (em minutos)", min_value=1, value=10, step=1)
+st.write("Faça upload da planilha, ajuste os horários de acordo com a ordem e baixe o resultado.")
+
+# Upload do arquivo
+uploaded_file = st.file_uploader("📂 Carregue sua planilha (Excel)", type=["xlsx"])
+
+# Input do tempo mínimo de pausa
+pause_threshold = st.number_input(
+    "Tempo mínimo de pausa (minutos)", 
+    min_value=1, max_value=120, value=10
+)
 
 if uploaded_file:
-    # Pegando o nome original do arquivo (sem extensão)
-    original_filename = os.path.splitext(uploaded_file.name)[0]
-
-    # Lendo Excel
     df = pd.read_excel(uploaded_file)
 
+    st.subheader("📊 Pré-visualização dos dados originais")
+    st.dataframe(df.head())
+
+    # Copia para trabalhar
+    new_df = df.copy()
+    
    # Loop em todos os pares HORARIO/ORDEM
     for col in df.columns:
         if col.startswith("HORARIO"):
@@ -76,8 +86,4 @@ if uploaded_file:
         label="⬇️ Baixar arquivo corrigido",
         data=output,
         file_name=corrected_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-
-
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",)
