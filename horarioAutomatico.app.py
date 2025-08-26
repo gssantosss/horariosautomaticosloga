@@ -17,6 +17,12 @@ if uploaded_file:
     # Lendo Excel
     df = pd.read_excel(uploaded_file)
 
+    # Verifica os nomes das colunas
+    st.write("Nomes das colunas:", df.columns)
+
+    # Verifica o conteúdo do DataFrame
+    st.write("Conteúdo do DataFrame:", df.head())
+
     # Lista de dias da semana que aparecem na planilha
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB"]
 
@@ -69,4 +75,5 @@ if uploaded_file:
         label="⬇️ Baixar arquivo corrigido",
         data=output,
         file_name=corrected_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",)
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
