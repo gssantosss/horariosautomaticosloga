@@ -58,7 +58,7 @@ if uploaded_file:
                 horarios.append(proximo)
 
             # Atualiza no DF final (só a coluna de horário, não mexe na ordem)
-            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]]
+            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]
 
     # Salvar em memória o Excel corrigido
     output = io.BytesIO()
@@ -78,5 +78,6 @@ if uploaded_file:
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 
 
