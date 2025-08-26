@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 
 st.set_page_config(page_title="Ajuste de Horários", layout="wide")
-st.title("🕒haha Ajuste Automático de Horários da Coleta")
+st.title("🕒 heheAjuste Automático de Horários da Coleta")
 st.write("Faça upload da planilha, ajuste os horários de acordo com a ordem e baixe o resultado.")
 
 # Upload do arquivo
@@ -33,13 +33,10 @@ if uploaded_file:
                 continue
 
             # Converte coluna de horário para datetime, valores inválidos viram NaT
-            df[horario_col] = pd.to_datetime(df[horario_col], errors='coerce')
+            df[horario_col] = pd.to_datetime(df[horario_col], format='%H:%M', errors='coerce')
             subset = df[[horario_col, ordem_col]].dropna().copy()
             if subset.empty:
                 continue
-
-            # Ordena pelo número da ordem
-            subset = subset.sort_values(by=ordem_col)
 
             # Ordena os horários
             subset = subset.sort_values(by=horario_col)
@@ -81,5 +78,5 @@ if uploaded_file:
         label="⬇️ Baixar arquivo corrigido",
         data=output,
         file_name=corrected_filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
