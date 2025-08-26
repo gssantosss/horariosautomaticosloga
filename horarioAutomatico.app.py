@@ -17,12 +17,6 @@ if uploaded_file:
     # Lendo Excel
     df = pd.read_excel(uploaded_file)
 
-    # Verifica os nomes das colunas
-    st.write("Nomes das colunas:", df.columns)
-
-    # Verifica o conteúdo do DataFrame
-    st.write("Conteúdo do DataFrame:", df.head())
-
     # Lista de dias da semana que aparecem na planilha
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB"]
 
@@ -30,9 +24,8 @@ if uploaded_file:
     def corrigir_horarios(sub_df):
         horarios = sub_df.copy()
         horarios = horarios.sort_values("ordem")
-        
-        # Converte os horários para datetime
-        horarios["horario"] = pd.to_datetime(horarios["horario"], format='%H:%M', errors='coerce')
+        horarios["horario_corrigido"] = horarios["horario"].ffill()
+        return horarios
         
         # Corrige os horários com base no limite de gap
         for i in range(1, len(horarios)):
@@ -42,10 +35,6 @@ if uploaded_file:
             # Se o gap for maior que o limite, ajusta o horário
             if gap > limite_gap:
                 horarios.iloc[i]["horario"] = horarios.iloc[i - 1]["horario"] + pd.Timedelta(minutes=limite_gap)
-
-        # Formata os horários de volta para string
-        horarios["horario_corrigido"] = horarios["horario"].dt.strftime('%H:%M')
-        return horarios
 
     # Loop pelos dias e corrigir
     for dia in dias:
@@ -77,3 +66,4 @@ if uploaded_file:
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
