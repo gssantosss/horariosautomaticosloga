@@ -42,7 +42,8 @@ if uploaded_file:
     # Salvar em memória o Excel corrigido
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Planilha Corrigida")
+        # 👇 nome da aba agora é "original_corrigida"
+        df.to_excel(writer, index=False, sheet_name=f"{original_filename}_corrigida")
     output.seek(0)
 
     # Nome final do arquivo
@@ -54,4 +55,3 @@ if uploaded_file:
         data=output,
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",)
-
