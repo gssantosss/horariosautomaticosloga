@@ -7,13 +7,13 @@ st.title("🕒Correção Automática de Horários")
 
 uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
 
+# Configuração do limite de gap
+limite_gap = st.number_input("Defina o limite máximo de gap (em minutos)", min_value=1, value=10, step=1)
+
 if uploaded_file:
     # Pegando o nome original do arquivo (sem extensão)
     original_filename = os.path.splitext(uploaded_file.name)[0]
 
-    # Configuração do limite de gap
-    limite_gap = st.number_input("Defina o limite máximo de gap (em minutos)", min_value=1, value=10, step=1)
-    
     # Lendo Excel
     df = pd.read_excel(uploaded_file)
 
@@ -54,3 +54,4 @@ if uploaded_file:
         data=output,
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",)
+
