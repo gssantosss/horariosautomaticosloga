@@ -41,29 +41,31 @@ if uploaded_file:
             # Ordena pelo número da ordem
             subset = subset.sort_values(by=ordem_col)
 
-            inicio = subset[horario_col].min()
-            fim = subset[horario_col].max()
-            total_itens = len(subset)
-            if total_itens <= 1:
-                continue
+            # Ordena os horários
+            subset = subset.sort_values(by=horario_col)
 
-            # Intervalo uniforme entre início e fim
-            intervalo_base = (fim - inicio) / (total_itens - 1)
-
-            # Gera os novos horários distribuídos uniformemente
-            horarios = [inicio]
-            for i in range(1, total_itens):
-                proximo = inicio + intervalo_base * i  # distribuição uniforme
-
-                # Se houver gap maior que o limite, mantém esse gap
-                gap_original = subset[horario_col].iloc[i] - subset[horario_col].iloc[i-1]
-                if gap_original >= timedelta(minutes=pause_threshold):
-                    proximo = horarios[-1] + gap_original
-
-                horarios.append(proximo)
+            # Gera os novos horários respeitando os gaps
+            horarios = []
+            for i in range(len(subset)):
+                if i == 0:
+                    horarios.append(subset[horario_col].iloc[i])  # Primeiro horário
+                else:
+                    # Calcula o próximo horário respeitando o gap
+                    gap = subset[horario_col].iloc[i] - subset[horario_col].iloc[i - 1]
+                    if gap >= timedelta(minutes=pause_threshold):
+                        # Se o gap for maior que o limite, mantém o horário original
+                        horarios.append(subset[horario_col].iloc[i])
+                    else:
+                        # Caso contrário, ajusta o horário
+                        proximo_horario = horarios[-1] + (gap / 2)  # Ajusta para o meio do gap
+                        horarios.append(proximo_horario)
 
             # Atualiza no DF final
             new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]
+
+    # Verifica se os horários foram corrigidos
+    st.subheader("📊 Horários Corrigidos")
+    st.dataframe(new_df[[col for col in new_df.columns if col.startswith("HORARIO")]])
 
     # Salvar Excel em memória
     output = BytesIO()
