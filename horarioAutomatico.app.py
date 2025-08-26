@@ -51,6 +51,20 @@ if uploaded_file:
             if total_itens <= 1:
                 continue
 
+
+
+
+            
+            # Garante que fim e inicio sejam datetimes válidos
+            fim = pd.to_datetime(fim, errors='coerce')
+            inicio = pd.to_datetime(inicio, errors='coerce')
+            
+            if pd.isna(fim) or pd.isna(inicio):
+                raise ValueError("Fim ou início não são datas válidas")
+            
+            if total_itens <= 1:
+                raise ValueError("total_itens deve ser maior que 1 para calcular intervalo")
+            
             intervalo_base = (fim - inicio) / (total_itens - 1)
 
             # Gera os novos horários
@@ -87,4 +101,5 @@ if uploaded_file:
         data=output,
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",)
+
 
