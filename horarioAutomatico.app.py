@@ -17,36 +17,48 @@ if uploaded_file:
     # Lendo Excel
     df = pd.read_excel(uploaded_file)
 
-    # Lista de dias da semana que aparecem na planilha
-    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB"]
+   # Loop em todos os pares HORARIO/ORDEM
+    for col in df.columns:
+        if col.startswith("HORARIO"):
+            dia = col.replace("HORARIO", "")
+            horario_col = col
+            ordem_col = f"ORDEM{dia}"
 
-    # Função para corrigir horários dentro de cada grupo de ordem
-    def corrigir_horarios(sub_df):
-        horarios = sub_df.copy()
-        horarios = horarios.sort_values("ordem")
-        horarios["horario_corrigido"] = horarios["horario"].ffill()
-        return horarios
-        
-        # Corrige os horários com base no limite de gap
-        for i in range(1, len(horarios)):
-            # Calcula a diferença em minutos
-            gap = (horarios.iloc[i]["horario"] - horarios.iloc[i - 1]["horario"]).total_seconds() / 60
-            
-            # Se o gap for maior que o limite, ajusta o horário
-            if gap > limite_gap:
-                horarios.iloc[i]["horario"] = horarios.iloc[i - 1]["horario"] + pd.Timedelta(minutes=limite_gap)
+            if ordem_col not in df.columns:
+                continue  # se não tiver coluna ORDEM correspondente, pula
+            # Subset de ordem + horário
+            subset = df[[horario_col, ordem_col]].dropna().copy()
+            if subset.empty:
+                continue
 
-    # Loop pelos dias e corrigir
-    for dia in dias:
-        ordem_col = f"ORDEM{dia}"
-        horario_col = f"HORARIO{dia}"
+            # Ordena pelo número da ordem
+            subset = subset.sort_values(by=ordem_col)
 
-        if ordem_col in df.columns and horario_col in df.columns:
-            temp = df[[ordem_col, horario_col]].rename(
-                columns={ordem_col: "ordem", horario_col: "horario"}
-            )
-            corrigido = corrigir_horarios(temp)
-            df[horario_col] = corrigido["horario_corrigido"]
+            inicio = pd.to_datetime(subset[horario_col].min())
+            fim = pd.to_datetime(subset[horario_col].max())
+
+            total_itens = len(subset)
+            if total_itens <= 1:
+                continue
+
+            intervalo_base = (fim - inicio) / (total_itens - 1)
+
+            # Gera os novos horários
+            horarios = [inicio]
+            for i in range(1, total_itens):
+                proximo = horarios[-1] + intervalo_base
+
+                gap_original = (
+                    pd.to_datetime(subset[horario_col].iloc[i]) 
+                    - pd.to_datetime(subset[horario_col].iloc[i-1])
+                )
+                if gap_original >= timedelta(minutes=pause_threshold):
+                    proximo = horarios[-1] + gap_original
+
+                horarios.append(proximo)
+
+            # Atualiza no DF final (só a coluna de horário, não mexe na ordem)
+            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]]
 
     # Salvar em memória o Excel corrigido
     output = io.BytesIO()
@@ -66,4 +78,5 @@ if uploaded_file:
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 
