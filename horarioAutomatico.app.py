@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 
 st.set_page_config(page_title="Ajuste de Horários", layout="wide")
-st.title("🕒 Ajuste Automático de Horários da Coleta")
+st.title("🕒haha Ajuste Automático de Horários da Coleta")
 st.write("Faça upload da planilha, ajuste os horários de acordo com a ordem e baixe o resultado.")
 
 # Upload do arquivo
@@ -82,3 +82,4 @@ if uploaded_file:
         data=output,
         file_name=corrected_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
