@@ -57,7 +57,11 @@ if uploaded_file:
                     else:
                         # Caso contrário, ajusta o horário para o próximo disponível
                         proximo_horario = novos_horarios[-1] + timedelta(minutes=pause_threshold)
-                        novos_horarios.append(proximo_horario)
+                        # Garante que o próximo horário não ultrapasse o último horário
+                        if proximo_horario < subset[horario_col].iloc[i + 1]:
+                            novos_horarios.append(proximo_horario)
+                        else:
+                            novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o horário original se ultrapassar
 
             # Atualiza no DF final
             new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in novos_horarios]
