@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 from io import BytesIO
 
 st.set_page_config(page_title="Ajuste de Horários", layout="wide")
-st.title("🕒 heheAjuste Automático de Horários da Coleta")
+st.title("🕒 Ajuste Automático de Horários da Coleta")
 st.write("Faça upload da planilha, ajuste os horários de acordo com a ordem e baixe o resultado.")
 
 # Upload do arquivo
@@ -42,23 +42,23 @@ if uploaded_file:
             subset = subset.sort_values(by=horario_col)
 
             # Gera os novos horários respeitando os gaps
-            horarios = []
+            novos_horarios = []
             for i in range(len(subset)):
                 if i == 0:
-                    horarios.append(subset[horario_col].iloc[i])  # Primeiro horário
+                    novos_horarios.append(subset[horario_col].iloc[i])  # Primeiro horário
                 else:
                     # Calcula o próximo horário respeitando o gap
                     gap = subset[horario_col].iloc[i] - subset[horario_col].iloc[i - 1]
                     if gap >= timedelta(minutes=pause_threshold):
                         # Se o gap for maior que o limite, mantém o horário original
-                        horarios.append(subset[horario_col].iloc[i])
+                        novos_horarios.append(subset[horario_col].iloc[i])
                     else:
                         # Caso contrário, ajusta o horário
-                        proximo_horario = horarios[-1] + (gap / 2)  # Ajusta para o meio do gap
-                        horarios.append(proximo_horario)
+                        proximo_horario = novos_horarios[-1] + (gap / 2)  # Ajusta para o meio do gap
+                        novos_horarios.append(proximo_horario)
 
             # Atualiza no DF final
-            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in horarios]
+            new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in novos_horarios]
 
     # Verifica se os horários foram corrigidos
     st.subheader("📊 Horários Corrigidos")
