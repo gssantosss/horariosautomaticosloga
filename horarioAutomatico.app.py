@@ -23,6 +23,9 @@ if uploaded_file:
     else:
         # Ordena os horários do maior para o menor
         for col in horario_cols:
+            # Limpa os dados removendo espaços em branco
+            df[col] = df[col].astype(str).str.strip()  # Converte para string e remove espaços
+
             # Tenta converter para datetime
             try:
                 df[col] = pd.to_datetime(df[col], format='%H:%M', errors='coerce')  # Converte para datetime
