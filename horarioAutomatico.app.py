@@ -41,32 +41,28 @@ if uploaded_file:
             # Ordena os horários
             subset = subset.sort_values(by=horario_col)
 
-            # Gera os novos horários respeitando os gaps
-            novos_horarios = []
-            for i in range(len(subset)):
-                if i == 0:
-                    novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o primeiro horário
-                elif i == len(subset) - 1:
-                    novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o último horário
-                else:
-                    # Calcula o próximo horário respeitando o gap
-                    gap = subset[horario_col].iloc[i] - subset[horario_col].iloc[i - 1]
-                    if gap >= timedelta(minutes=pause_threshold):
-                        # Se o gap for maior que o limite, mantém o horário original
-                        novos_horarios.append(subset[horario_col].iloc[i])
-                    else:
-                        # Caso contrário, ajusta o horário para o próximo disponível
-                        proximo_horario = novos_horarios[-1] + timedelta(minutes=pause_threshold)
-                        # Garante que o próximo horário não ultrapasse o último horário
-                        if proximo_horario < subset[horario_col].iloc[i + 1]:
-                            novos_horarios.append(proximo_horario)
-                        else:
-                            novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o horário original se ultrapassar
+            # Identifica o menor e o maior horário
+            menor_horario = subset[horario_col].iloc[0]
+            maior_horario = subset[horario_col].iloc[-1]
 
-            # Ajusta os horários para garantir que os horários entre 00:00 e 05:30 sejam considerados os maiores
-            for j in range(len(novos_horarios)):
-                if novos_horarios[j].hour < 6:  # Se o horário for antes das 06:00
-                    novos_horarios[j] = novos_horarios[j] + timedelta(days=1)  # Adiciona um dia
+            # Gera os novos horários respeitando os gaps
+            novos_horarios = [menor_horario]  # Mantém o menor horário
+            for i in range(1, len(subset) - 1):
+                # Calcula o próximo horário respeitando o gap
+                gap = subset[horario_col].iloc[i] - subset[horario_col].iloc[i - 1]
+                if gap >= timedelta(minutes=pause_threshold):
+                    # Se o gap for maior que o limite, mantém o horário original
+                    novos_horarios.append(subset[horario_col].iloc[i])
+                else:
+                    # Caso contrário, ajusta o horário para o próximo disponível
+                    proximo_horario = novos_horarios[-1] + timedelta(minutes=pause_threshold)
+                    # Garante que o próximo horário não ultrapasse o maior horário
+                    if proximo_horario < maior_horario:
+                        novos_horarios.append(proximo_horario)
+                    else:
+                        novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o horário original se ultrapassar
+
+            novos_horarios.append(maior_horario)  # Mantém o maior horário
 
             # Atualiza no DF final
             new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in novos_horarios]
