@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO  # Importação correta do BytesIO
 
 st.set_page_config(page_title="Ordenar Horários", layout="wide")
 st.title("🕒 Ordenar Horários do Maior para o Menor")
