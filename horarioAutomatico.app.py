@@ -45,7 +45,9 @@ if uploaded_file:
             novos_horarios = []
             for i in range(len(subset)):
                 if i == 0:
-                    novos_horarios.append(subset[horario_col].iloc[i])  # Primeiro horário
+                    novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o primeiro horário
+                elif i == len(subset) - 1:
+                    novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o último horário
                 else:
                     # Calcula o próximo horário respeitando o gap
                     gap = subset[horario_col].iloc[i] - subset[horario_col].iloc[i - 1]
@@ -53,8 +55,8 @@ if uploaded_file:
                         # Se o gap for maior que o limite, mantém o horário original
                         novos_horarios.append(subset[horario_col].iloc[i])
                     else:
-                        # Caso contrário, ajusta o horário
-                        proximo_horario = novos_horarios[-1] + (gap / 2)  # Ajusta para o meio do gap
+                        # Caso contrário, ajusta o horário para o próximo disponível
+                        proximo_horario = novos_horarios[-1] + timedelta(minutes=pause_threshold)
                         novos_horarios.append(proximo_horario)
 
             # Atualiza no DF final
