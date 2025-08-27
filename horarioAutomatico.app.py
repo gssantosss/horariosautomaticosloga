@@ -63,6 +63,11 @@ if uploaded_file:
                         else:
                             novos_horarios.append(subset[horario_col].iloc[i])  # Mantém o horário original se ultrapassar
 
+            # Ajusta os horários para garantir que os horários entre 00:00 e 05:30 sejam considerados os maiores
+            for j in range(len(novos_horarios)):
+                if novos_horarios[j].hour < 6:  # Se o horário for antes das 06:00
+                    novos_horarios[j] = novos_horarios[j] + timedelta(days=1)  # Adiciona um dia
+
             # Atualiza no DF final
             new_df.loc[subset.index, horario_col] = [h.strftime("%H:%M") for h in novos_horarios]
 
