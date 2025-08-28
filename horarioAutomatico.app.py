@@ -41,3 +41,19 @@ if uploaded_file is not None:
 
     st.write("### Colunas de horários ordenadas individualmente")
     st.dataframe(horarios_ordenados)
+    
+    st.write("### Planilha com colunas de horário ordenadas")
+    st.dataframe(df_ordenado)  # preview
+
+    # Download em Excel
+    towrite = io.BytesIO()
+    df_ordenado.to_excel(towrite, index=False)
+    towrite.seek(0)
+    st.download_button(
+        label="📥 Baixar Excel ordenado",
+        data=towrite,
+        file_name="planilha_ordenada.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    
+
