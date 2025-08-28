@@ -1,37 +1,43 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
 
-uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
+# Upload do arquivo
+uploaded_file = st.file_uploader("Envie sua planilha", type=["xlsx"])
 
-if uploaded_file:
-    # Lê o arquivo
+if uploaded_file is not None:
+    # Ler Excel
     df = pd.read_excel(uploaded_file)
-    
-    # Lê a planilha
-    df = pd.read_excel("upload.xlsx")
-    
-    # Identifica as colunas de horário (todas menos ORDEM, se existir)
-    colunas_horario = [c for c in df.columns if c != "ORDEM"]
-    
-    # Converte todas para datetime (ignorando data, só hora)
-    for col in colunas_horario:
-        df[col] = pd.to_datetime(df[col].astype(str), format='%H:%M', errors='coerce')
-    
-    # Ajuste para madrugadas: se um horário for menor que o primeiro horário do dia, soma 1 dia
-    for idx, row in df.iterrows():
-        horarios = row[colunas_horario].dropna().sort_values()
-        if len(horarios) > 0:
-            base = horarios.iloc[0]
-            for col in colunas_horario:
-                if pd.notna(row[col]) and row[col] < base:
-                    df.at[idx, col] = row[col] + pd.Timedelta(days=1)
-    
-    # Reordena os horários dentro da linha
-    for idx, row in df.iterrows():
-        valores = row[colunas_horario].dropna().sort_values().values
-        for i, col in enumerate(colunas_horario[:len(valores)]):
-            df.at[idx, col] = valores[i]
-    
-    # Salva de volta
-    df.to_excel("saida.xlsx", index=False)
-    
+
+    # Selecionar apenas colunas de horário
+    horario_cols = [col for col in df.columns if col.startswith("HORARIO")]
+
+    # Criar um DataFrame novo só com as colunas de horários ordenadas
+    horarios_ordenados = pd.DataFrame()
+
+    for col in horario_cols:
+        # Pega valores não nulos
+        horarios_raw = df[col].dropna().astype(str).tolist()
+
+        horarios = []
+        for h in horarios_raw:
+            try:
+                t = datetime.strptime(h.strip(), "%H:%M")
+                # se for depois da meia-noite, joga pro "dia seguinte"
+                if t.hour < 6:
+                    t = t + timedelta(days=1)
+                horarios.append(t)
+            except:
+                pass
+
+        # Ordena
+        horarios_sorted = sorted(horarios)
+
+        # Converte de volta pro formato hh:mm
+        horarios_fmt = [dt.strftime("%H:%M") for dt in horarios_sorted]
+
+        # Salva no dataframe novo
+        horarios_ordenados[col] = pd.Series(horarios_fmt)
+
+    st.write("### Colunas de horários ordenadas individualmente")
+    st.dataframe(horarios_ordenados)
