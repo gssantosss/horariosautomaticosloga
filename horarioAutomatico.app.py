@@ -65,8 +65,20 @@ if uploaded_file is not None:
     name, ext = os.path.splitext(original_name)
     novo_nome = f"{name}_ajustado.xlsx"
 
-    with pd.ExcelWriter(output, engine='xlsxwriter', datetime_format='hh:mm') as writer:
-        df.to_excel(writer, index=False)
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+        workbook  = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        time_format = workbook.add_format({'num_format': 'hh:mm'})
+
+        for dia in dias:
+            col_horario = f"HORARIO{dia}"
+            if col_horario in df.columns:
+                col_idx = df.columns.get_loc(col_horario)
+                # Ajusta largura da coluna e aplica formato de hora
+                worksheet.set_column(col_idx, col_idx, 12, time_format)
+
     output.seek(0)
 
     st.success("✅ Ajuste concluído!")
