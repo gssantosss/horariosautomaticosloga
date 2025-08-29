@@ -12,12 +12,10 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte colunas HORARIO para datetime e formata como HH:MM
+    # Converte colunas HORARIO para datetime (hora e minuto)
     for col in horario_cols:
-        if col in df.columns and df[col].notna().sum() > 0:
+        if col in df.columns:
             df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M:%S', errors='coerce')
-        else:
-            df[col] = pd.NaT
 
     # Cria uma versão para exibição com os horários como texto HH:MM e células vazias
     df_display = df.copy()
