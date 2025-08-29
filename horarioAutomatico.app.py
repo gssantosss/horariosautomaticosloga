@@ -70,6 +70,8 @@ if uploaded_file is not None:
     # manter ordem original das colunas religiosamente
     df = df[original_cols]
 
+    st.dataframe(df.head())
+    
     # preparar o arquivo para download com formatação hh:mm
     output = BytesIO()
     original_name = uploaded_file.name
@@ -87,3 +89,4 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
