@@ -12,21 +12,17 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte colunas HORARIO para datetime (hora e minuto)
+    # Converte colunas HORARIO para texto 'HH:MM' e deixa vazios os nulos
     for col in horario_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M:%S', errors='coerce')
+            df[col] = df[col].apply(lambda x: x.strftime('%H:%M') if pd.notnull(x) else "")
 
-    # Cria uma versão para exibição com os horários como texto HH:MM e células vazias
-    df_display = df.copy()
-    for col in horario_cols:
-        if col in df_display.columns:
-            df_display[col] = df_display[col].apply(lambda x: x.strftime('%H:%M') if pd.notnull(x) else "")
-
+    # Exibe a versão formatada no Streamlit
     st.write("Planilha com horários convertidos:")
-    st.dataframe(df_display)
+    st.dataframe(df)
 
-    # Exporta para Excel com formato de hora
+    # Exporta para Excel com os horários como texto
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
@@ -37,12 +33,11 @@ if uploaded_file is not None:
         workbook = writer.book
         worksheet = writer.sheets["Ajustado"]
 
-        time_format = workbook.add_format({'num_format': 'hh:mm'})
-
+        # Define largura das colunas de horário
         for col in horario_cols:
             if col in df.columns:
                 col_idx = df.columns.get_loc(col)
-                worksheet.set_column(col_idx, col_idx, 12, time_format)
+                worksheet.set_column(col_idx, col_idx, 12)  # largura da coluna
 
     output.seek(0)
 
