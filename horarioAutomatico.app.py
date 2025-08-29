@@ -50,12 +50,12 @@ if uploaded_file is not None:
         if col_horario in df.columns:
             df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce')
 
-    # Para exibir no Streamlit, cria cópia com strings formatadas só para visualização
+    # Cria uma cópia para exibição no Streamlit com horários formatados e valores nulos como '--:--'
     df_display = df.copy()
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         if col_horario in df_display.columns:
-            df_display[col_horario] = df_display[col_horario].dt.strftime('%H:%M').fillna('')
+            df_display[col_horario] = df_display[col_horario].dt.strftime('%H:%M').fillna('--:--')
 
     st.dataframe(df_display.head())
 
