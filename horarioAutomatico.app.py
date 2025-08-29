@@ -33,12 +33,12 @@ if uploaded_file is not None:
                 # 3) Ordenar horários
                 sorted_times = t_adj.sort_values().reset_index(drop=True)
 
-                # 4) Criar mapa ORDEM passo3 -> HORÁRIO
+                # 4) Criar mapa ORDEM passo3 -> HORÁRIO formatado HH:MM
                 ordem_passo3 = range(1, len(sorted_times) + 1)
                 mapa_horario = dict(zip(ordem_passo3, sorted_times.dt.strftime("%H:%M")))
 
-                # 5) Reatribuir horários mantendo a ordem original
-                df[col_horario] = df[col_ordem].map(mapa_horario)
+                # 5) Reatribuir horários mantendo a ordem original e forçando formato string HH:MM
+                df[col_horario] = df[col_ordem].map(mapa_horario).astype(str)
     
     # 6) Preparar download
     output = BytesIO()
