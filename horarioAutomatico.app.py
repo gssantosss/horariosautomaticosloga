@@ -5,7 +5,6 @@ import os
 
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
-# Upload da planilha
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
@@ -13,34 +12,38 @@ if uploaded_file is not None:
     st.write("📋 Planilha original carregada:")
     st.dataframe(df.head())
 
-    # Detectar automaticamente os pares HORÁRIO + ORDEM
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
-    
+
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         col_ordem = f"ORDEM{dia}"
-        
-        if col_horario in df.columns and col_ordem in df.columns:
-            if df[col_horario].notna().any() and df[col_ordem].notna().any():
-                # 1) Converter para datetime
-                t = pd.to_datetime(df[col_horario], format="%H:%M", errors="coerce")
 
-                # 2) Regra da virada
+        if col_horario in df.columns and col_ordem in df.columns:
+            # Selecionar apenas linhas com dados
+            mask_valid = df[col_horario].notna() & df[col_ordem].notna()
+            if mask_valid.any():
+                # 1) Garantir que a coluna de horário seja string
+                horarios = df.loc[mask_valid, col_horario].astype(str)
+
+                # 2) Converter para datetime apenas para cálculo
+                t = pd.to_datetime(horarios, format="%H:%M", errors="coerce")
+
+                # 3) Regra da virada
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-                # 3) Ordenar horários
+                # 4) Ordenar horários ajustados
                 sorted_times = t_adj.sort_values().reset_index(drop=True)
 
-                # 4) Criar mapa ORDEM passo3 -> HORÁRIO formatado HH:MM
+                # 5) Criar mapa ORDEM passo3 -> horário formatado HH:MM
                 ordem_passo3 = range(1, len(sorted_times) + 1)
                 mapa_horario = dict(zip(ordem_passo3, sorted_times.dt.strftime("%H:%M")))
 
-                # 5) Reatribuir horários mantendo a ordem original e forçando formato string HH:MM
-                df[col_horario] = df[col_ordem].map(mapa_horario).astype(str)
-    
-    # 6) Preparar download
+                # 6) Reatribuir horários mantendo a ordem original
+                df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_horario)
+
+    # 7) Preparar download
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
