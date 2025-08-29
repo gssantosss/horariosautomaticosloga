@@ -6,6 +6,7 @@ import os
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
 def excel_time_to_datetime(t):
+    # Converte número decimal do Excel (fração do dia) para Timestamp datetime
     return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
@@ -26,11 +27,13 @@ if uploaded_file is not None:
             if mask_valid.any():
                 valores = df.loc[mask_valid, col_horario]
 
+                # Se vier como float (fração do dia), converte para datetime
                 if pd.api.types.is_float_dtype(valores):
                     t = valores.apply(excel_time_to_datetime)
                 else:
                     t = pd.to_datetime(valores, errors='coerce')
 
+                # Aplica regra da virada da noite
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
@@ -44,11 +47,11 @@ if uploaded_file is not None:
 
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
 
-    # Converter colunas HORARIO para datetime.time para exportar corretamente
+    # Garante que colunas HORARIO estão em datetime64[ns] para exportar corretamente
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         if col_horario in df.columns:
-            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce').dt.time
+            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce')
 
     st.dataframe(df.head())
  
