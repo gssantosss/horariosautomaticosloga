@@ -44,11 +44,17 @@ if uploaded_file is not None:
 
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
 
-    # Converte colunas HORARIO para datetime.time (apenas hora:minuto:segundo)
+        # Converte colunas HORARIO para fração do dia (float) para exportar corretamente
+    def datetime_to_excel_time(dt_series):
+        return (dt_series.dt.hour * 3600 + dt_series.dt.minute * 60 + dt_series.dt.second) / 86400
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         if col_horario in df.columns:
-            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce').dt.time
+            dt_col = pd.to_datetime(df[col_horario], errors='coerce')
+            df[col_horario] = datetime_to_excel_time(dt_col)
+    # Exporta para Excel com formato de hora
+    with pd.ExcelWriter(output, engine='xlsxwriter', datetime_format='hh:mm') as writer:
+        df.to_excel(writer, index=False)
 
     st.dataframe(df.head())
  
@@ -68,3 +74,4 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
