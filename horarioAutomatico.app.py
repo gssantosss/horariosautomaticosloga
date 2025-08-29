@@ -6,7 +6,6 @@ import os
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
 def excel_time_to_datetime(t):
-    # Converte número decimal do Excel (fração do dia) para Timestamp datetime
     return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
@@ -27,33 +26,32 @@ if uploaded_file is not None:
             if mask_valid.any():
                 valores = df.loc[mask_valid, col_horario]
 
-                # Detecta se os valores são float (fração do dia do Excel)
                 if pd.api.types.is_float_dtype(valores):
                     t = valores.apply(excel_time_to_datetime)
                 else:
-                    # Caso já sejam strings ou datetime, tenta converter direto
                     t = pd.to_datetime(valores, errors='coerce')
 
-                # Aplica regra da virada da noite
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-                # DataFrame auxiliar para mapear ordem e horário ajustado
                 aux = df.loc[mask_valid, [col_ordem]].copy()
                 aux['horario_ajustado'] = t_adj.values
                 aux = aux.sort_values('horario_ajustado').reset_index()
                 aux['nova_ordem'] = range(1, len(aux) + 1)
 
-                # Mapeia nova ordem para horário ajustado
                 mapa_ordem_horario = dict(zip(aux['nova_ordem'], aux['horario_ajustado']))
 
-                # Substitui horários na ordem original usando o mapa
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
+
+    # Converter colunas HORARIO para datetime.time para exportar corretamente
+    for dia in dias:
+        col_horario = f"HORARIO{dia}"
+        if col_horario in df.columns:
+            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce').dt.time
 
     st.dataframe(df.head())
  
-    # Preparar download usando datetime_format para Excel hh:mm
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
