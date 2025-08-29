@@ -10,12 +10,22 @@ def excel_time_to_datetime(t):
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
+    # Lê o Excel forçando colunas HORARIO como string
     df = pd.read_excel(uploaded_file)
+    
+    # Identifica colunas HORARIO para converter
+    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
+    horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
+    
+    # Converte colunas HORARIO para datetime com formato HH:MM
+    for col in horario_cols:
+        # Primeiro converte para string para garantir formato consistente
+        df[col] = df[col].astype(str)
+        # Remove possíveis espaços e converte para datetime
+        df[col] = pd.to_datetime(df[col].str.strip(), format='%H:%M', errors='coerce')
     
     st.write("📋 Planilha original carregada:")
     st.dataframe(df.head())
-
-    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
 
     for dia in dias:
         col_horario = f"HORARIO{dia}"
@@ -44,19 +54,16 @@ if uploaded_file is not None:
 
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
 
-    # Mantém colunas HORARIO como datetime64 para exportar corretamente
-    for dia in dias:
-        col_horario = f"HORARIO{dia}"
-        if col_horario in df.columns:
-            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce')
+    # Garante que todas as colunas HORARIO estão como datetime
+    for col in horario_cols:
+        df[col] = pd.to_datetime(df[col], errors='coerce')
 
-    # Cria uma cópia para exibição no Streamlit com horários formatados e valores nulos como '--:--'
+    # Cria cópia para exibição com horários formatados
     df_display = df.copy()
-    for dia in dias:
-        col_horario = f"HORARIO{dia}"
-        if col_horario in df_display.columns:
-            df_display[col_horario] = df_display[col_horario].dt.strftime('%H:%M').fillna('--:--')
+    for col in horario_cols:
+        df_display[col] = df_display[col].dt.strftime('%H:%M')
 
+    st.write("📋 Planilha ajustada:")
     st.dataframe(df_display.head())
 
     output = BytesIO()
@@ -66,16 +73,14 @@ if uploaded_file is not None:
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name="Ajustado")
-        workbook  = writer.book
+        workbook = writer.book
         worksheet = writer.sheets["Ajustado"]
 
         time_format = workbook.add_format({'num_format': 'hh:mm'})
 
-        for dia in dias:
-            col_horario = f"HORARIO{dia}"
-            if col_horario in df.columns:
-                col_idx = df.columns.get_loc(col_horario)
-                worksheet.set_column(col_idx, col_idx, 12, time_format)
+        for col in horario_cols:
+            col_idx = df.columns.get_loc(col)
+            worksheet.set_column(col_idx, col_idx, 12, time_format)
 
     output.seek(0)
 
