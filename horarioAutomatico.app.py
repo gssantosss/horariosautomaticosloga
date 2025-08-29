@@ -29,16 +29,24 @@ if uploaded_file is not None:
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-                # Ordenar horários
-                sorted_times = t_adj.sort_values().reset_index(drop=True)
+                # Criar DataFrame auxiliar com ordem original e horário ajustado
+                aux = df.loc[mask_valid, [col_ordem]].copy()
+                aux['horario_ajustado'] = t_adj.values
 
-                # Criar mapa ORDEM passo3 -> horário datetime
-                ordem_passo3 = range(1, len(sorted_times) + 1)
-                mapa_horario = dict(zip(ordem_passo3, sorted_times))
+                # Ordenar pelo horário ajustado
+                aux = aux.sort_values('horario_ajustado').reset_index()
 
-                # Reatribuir mantendo ordem original
-                df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_horario)
+                # Criar nova ordem sequencial
+                aux['nova_ordem'] = range(1, len(aux) + 1)
 
+                # Mapear nova ordem para horário ajustado
+                mapa_ordem_horario = dict(zip(aux['nova_ordem'], aux['horario_ajustado']))
+
+                # Substituir horários na ordem original usando o mapa
+                df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
+
+    st.dataframe(df.head())
+ 
     # Preparar download usando datetime_format para Excel hh:mm
     output = BytesIO()
     original_name = uploaded_file.name
