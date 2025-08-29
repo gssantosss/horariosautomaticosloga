@@ -12,14 +12,16 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte todas as colunas HORARIO para datetime (hora e minuto)
+    # Converte colunas HORARIO para datetime apenas se tiverem dados
     for col in horario_cols:
-        df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
+        if col in df.columns and df[col].notna().sum() > 0:
+            df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M:%S', errors='coerce')
 
     # Cria uma versão para exibição com os horários como texto
     df_display = df.copy()
     for col in horario_cols:
-        df_display[col] = df[col].apply(lambda x: x.strftime('%H:%M') if pd.notnull(x) else "")
+        if col in df_display.columns:
+            df_display[col] = df_display[col].apply(lambda x: x.strftime('%H:%M') if pd.notnull(x) else "--")
 
     st.write("Planilha com horários convertidos:")
     st.dataframe(df_display)
@@ -38,8 +40,9 @@ if uploaded_file is not None:
         time_format = workbook.add_format({'num_format': 'hh:mm'})
 
         for col in horario_cols:
-            col_idx = df.columns.get_loc(col)
-            worksheet.set_column(col_idx, col_idx, 12, time_format)
+            if col in df.columns:
+                col_idx = df.columns.get_loc(col)
+                worksheet.set_column(col_idx, col_idx, 12, time_format)
 
     output.seek(0)
 
