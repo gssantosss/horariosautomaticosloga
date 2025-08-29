@@ -12,18 +12,17 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte colunas HORARIO conforme o tipo
+    # Converte colunas HORARIO para datetime (com hora e minuto)
     for col in horario_cols:
         if pd.api.types.is_object_dtype(df[col]):
             df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
         else:
-            # Coluna float64 (vazia ou NaN), preenche com NaT
             df[col] = pd.NaT
 
-    # Prepara DataFrame para exibição formatada
+    # Cria uma versão para exibição com os horários como texto
     df_display = df.copy()
     for col in horario_cols:
-        df_display[col] = df_display[col].dt.strftime('%H:%M')
+        df_display[col] = df[col].apply(lambda x: x.strftime('%H:%M') if pd.notnull(x) else "")
 
     st.write("Planilha com horários convertidos:")
     st.dataframe(df_display)
