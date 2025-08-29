@@ -1,70 +1,57 @@
-import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
-import io
+import streamlit as st
+from io import BytesIO
+import os
 
-def parse_horario(h):
-    """Converte valores de hora (string, datetime, float do Excel) em datetime,
-    considerando pós-meia-noite como dia seguinte"""
-    if pd.isna(h):
-        return None
-    try:
-        if isinstance(h, datetime):  # já é datetime
-            t = h
-        elif hasattr(h, "hour") and hasattr(h, "minute"):  # datetime.time
-            t = datetime(1900, 1, 1, h.hour, h.minute)
-        elif isinstance(h, (int, float)):  # número do Excel (fração do dia)
-            total_min = int(round(h * 24 * 60))
-            horas, minutos = divmod(total_min, 60)
-            t = datetime(1900, 1, 1, horas % 24, minutos % 60)
-        else:  # string "HH:MM"
-            h_str = str(h).strip()
-            t = datetime.strptime(h_str, "%H:%M")
+st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
-        # Se for depois da meia-noite até 05:59, joga pro "dia seguinte"
-        if t.hour < 6:
-            t = t + timedelta(days=1)
-        return t
-    except:
-        return None
-
-# Streamlit
-st.title("⏰ Ordenador de Horários")
-
-uploaded_file = st.file_uploader("Envie sua planilha", type=["xlsx"])
-
+# Upload da planilha
+uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
+    
+    st.write("📋 Planilha original carregada:")
+    st.dataframe(df.head())
 
-    # Selecionar colunas de horário
-    horario_cols = [col for col in df.columns if col.startswith("HORARIO")]
+    # Detectar automaticamente os pares HORÁRIO + ORDEM
+    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
+    
+    for dia in dias:
+        col_horario = f"HORARIO{dia}"
+        col_ordem = f"ORDEM{dia}"
+        
+        if col_horario in df.columns and col_ordem in df.columns:
+            if df[col_horario].notna().any() and df[col_ordem].notna().any():
+                # 1) Converter para datetime
+                t = pd.to_datetime(df[col_horario], format="%H:%M", errors="coerce")
 
-    # Copiar dataframe original
-    df_ordenado = df.copy()
+                # 2) Regra da virada
+                has_night = (t.dt.hour >= 18).any()
+                has_early = (t.dt.hour < 10).any()
+                t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-    for col in horario_cols:
-        parsed = df[col].apply(parse_horario)
+                # 3) Ordenar horários
+                sorted_times = t_adj.sort_values().reset_index(drop=True)
 
-        # Ordenar mantendo NaN no final
-        sorted_vals = parsed.dropna().sort_values().reset_index(drop=True)
+                # 4) Criar mapa ORDEM passo3 -> HORÁRIO
+                ordem_passo3 = range(1, len(sorted_times) + 1)
+                mapa_horario = dict(zip(ordem_passo3, sorted_times.dt.strftime("%H:%M")))
 
-        # Recolocar no mesmo tamanho da coluna original
-        reordered = pd.Series(
-            [val.strftime("%H:%M") if val else None for val in sorted_vals]
-        )
-        reordered = reordered.reindex(range(len(df)))  # garante mesmo tamanho
-        df_ordenado[col] = reordered
+                # 5) Reatribuir horários mantendo a ordem original
+                df[col_horario] = df[col_ordem].map(mapa_horario)
+    
+    # 6) Preparar download
+    output = BytesIO()
+    original_name = uploaded_file.name
+    name, ext = os.path.splitext(original_name)
+    novo_nome = f"{name}_ajustado.xlsx"
+    df.to_excel(output, index=False)
+    output.seek(0)
 
-    st.write("### Planilha com colunas de horário ordenadas")
-    st.dataframe(df_ordenado)
-
-    # Botão de download em Excel
-    towrite = io.BytesIO()
-    df_ordenado.to_excel(towrite, index=False)
-    towrite.seek(0)
+    st.success("✅ Ajuste concluído!")
     st.download_button(
-        label="📥 Baixar Excel ordenado",
-        data=towrite,
-        file_name="planilha_ordenada.xlsx",
+        label="⬇️ Baixar planilha ajustada",
+        data=output,
+        file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
