@@ -3,7 +3,7 @@ import streamlit as st
 from io import BytesIO
 import os
 
-st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
+st.title("Ajuste de Horários")
 
 def excel_time_to_datetime(t):
     # Converte número decimal do Excel (fração do dia) para Timestamp datetime
@@ -88,3 +88,4 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
