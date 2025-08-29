@@ -14,10 +14,7 @@ if uploaded_file is not None:
 
     # Converte colunas HORARIO para datetime (com hora e minuto)
     for col in horario_cols:
-        if pd.api.types.is_object_dtype(df[col]):
-            df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
-        else:
-            df[col] = pd.NaT
+    df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
 
     # Cria uma versão para exibição com os horários como texto
     df_display = df.copy()
@@ -53,3 +50,4 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
