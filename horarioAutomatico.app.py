@@ -12,7 +12,7 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte colunas HORARIO para datetime (com hora e minuto)
+    # Converte todas as colunas HORARIO para datetime (hora e minuto)
     for col in horario_cols:
         df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
 
@@ -50,5 +50,3 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-
