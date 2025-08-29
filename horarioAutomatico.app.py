@@ -5,6 +5,10 @@ import os
 
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
+def excel_time_to_datetime(t):
+    # Converte número decimal do Excel (fração do dia) para Timestamp datetime
+    return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
+
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
@@ -21,28 +25,30 @@ if uploaded_file is not None:
         if col_horario in df.columns and col_ordem in df.columns:
             mask_valid = df[col_horario].notna() & df[col_ordem].notna()
             if mask_valid.any():
-                # Converter para datetime para cálculo
-                t = pd.to_datetime(df.loc[mask_valid, col_horario], format="%H:%M", errors="coerce")
+                valores = df.loc[mask_valid, col_horario]
 
-                # Regra da virada
+                # Detecta se os valores são float (fração do dia do Excel)
+                if pd.api.types.is_float_dtype(valores):
+                    t = valores.apply(excel_time_to_datetime)
+                else:
+                    # Caso já sejam strings ou datetime, tenta converter direto
+                    t = pd.to_datetime(valores, errors='coerce')
+
+                # Aplica regra da virada da noite
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-                # Criar DataFrame auxiliar com ordem original e horário ajustado
+                # DataFrame auxiliar para mapear ordem e horário ajustado
                 aux = df.loc[mask_valid, [col_ordem]].copy()
                 aux['horario_ajustado'] = t_adj.values
-
-                # Ordenar pelo horário ajustado
                 aux = aux.sort_values('horario_ajustado').reset_index()
-
-                # Criar nova ordem sequencial
                 aux['nova_ordem'] = range(1, len(aux) + 1)
 
-                # Mapear nova ordem para horário ajustado
+                # Mapeia nova ordem para horário ajustado
                 mapa_ordem_horario = dict(zip(aux['nova_ordem'], aux['horario_ajustado']))
 
-                # Substituir horários na ordem original usando o mapa
+                # Substitui horários na ordem original usando o mapa
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
 
     st.dataframe(df.head())
