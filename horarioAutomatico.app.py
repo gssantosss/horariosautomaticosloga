@@ -3,10 +3,7 @@ import streamlit as st
 from io import BytesIO
 import os
 
-st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
-
-def excel_time_to_datetime(t):
-    return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
+st.title("Ajuste e Visualização de Horários")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
@@ -15,17 +12,20 @@ if uploaded_file is not None:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     horario_cols = [f"HORARIO{dia}" for dia in dias if f"HORARIO{dia}" in df.columns]
 
-    # Converte colunas HORARIO corretamente
+    # Converte colunas HORARIO conforme o tipo
     for col in horario_cols:
-        if pd.api.types.is_float_dtype(df[col]):
-            df[col] = df[col].apply(excel_time_to_datetime)
-        else:
+        if pd.api.types.is_object_dtype(df[col]):
             df[col] = pd.to_datetime(df[col].astype(str).str.strip(), format='%H:%M', errors='coerce')
+        else:
+            # Coluna float64 (vazia ou NaN), preenche com NaT
+            df[col] = pd.NaT
 
-    st.write("Planilha com horários convertidos:")
+    # Prepara DataFrame para exibição formatada
     df_display = df.copy()
     for col in horario_cols:
         df_display[col] = df_display[col].dt.strftime('%H:%M')
+
+    st.write("Planilha com horários convertidos:")
     st.dataframe(df_display)
 
     # Exporta para Excel com formato de hora
