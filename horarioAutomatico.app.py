@@ -19,36 +19,34 @@ if uploaded_file is not None:
         col_ordem = f"ORDEM{dia}"
 
         if col_horario in df.columns and col_ordem in df.columns:
-            # Selecionar apenas linhas com dados
             mask_valid = df[col_horario].notna() & df[col_ordem].notna()
             if mask_valid.any():
-                # 1) Garantir que a coluna de horário seja string
-                horarios = df.loc[mask_valid, col_horario].astype(str)
+                # Converter para datetime para cálculo
+                t = pd.to_datetime(df.loc[mask_valid, col_horario], format="%H:%M", errors="coerce")
 
-                # 2) Converter para datetime apenas para cálculo
-                t = pd.to_datetime(horarios, format="%H:%M", errors="coerce")
-
-                # 3) Regra da virada
+                # Regra da virada
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
                 t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
 
-                # 4) Ordenar horários ajustados
+                # Ordenar horários
                 sorted_times = t_adj.sort_values().reset_index(drop=True)
 
-                # 5) Criar mapa ORDEM passo3 -> horário formatado HH:MM
+                # Criar mapa ORDEM passo3 -> horário datetime
                 ordem_passo3 = range(1, len(sorted_times) + 1)
-                mapa_horario = dict(zip(ordem_passo3, sorted_times.dt.strftime("%H:%M")))
+                mapa_horario = dict(zip(ordem_passo3, sorted_times))
 
-                # 6) Reatribuir horários mantendo a ordem original
+                # Reatribuir mantendo ordem original
                 df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_horario)
 
-    # 7) Preparar download
+    # Preparar download usando datetime_format para Excel hh:mm
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
     novo_nome = f"{name}_ajustado.xlsx"
-    df.to_excel(output, index=False)
+
+    with pd.ExcelWriter(output, engine='xlsxwriter', datetime_format='hh:mm') as writer:
+        df.to_excel(writer, index=False)
     output.seek(0)
 
     st.success("✅ Ajuste concluído!")
