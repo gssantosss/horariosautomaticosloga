@@ -3,82 +3,81 @@ import streamlit as st
 from io import BytesIO
 import os
 
-st.title("Ajuste de Horários")
+st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
-def excel_time_to_datetime(t):
-    # Converte número decimal do Excel (fração do dia) para Timestamp datetime
-    return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
-
-def datetime_to_excel_time(dt_series):
-    # Converte datetime64 para fração do dia (float)
-    return (dt_series.dt.hour * 3600 + dt_series.dt.minute * 60 + dt_series.dt.second) / 86400
+# Converte número excel (fração do dia) para Timestamp com base 1900-01-01
+def excel_time_to_datetime_series(s):
+    # s: Series numeric (fração do dia)
+    return pd.to_timedelta(s.astype(float), unit="d") + pd.Timestamp("1900-01-01")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file is not None:
+    # lê mantendo inferência normal
     df = pd.read_excel(uploaded_file)
-    
+
     st.write("📋 Planilha original carregada:")
     st.dataframe(df.head())
 
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
+    original_cols = df.columns.tolist()
 
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         col_ordem = f"ORDEM{dia}"
 
         if col_horario in df.columns and col_ordem in df.columns:
+            # linhas com ambos preenchidos
             mask_valid = df[col_horario].notna() & df[col_ordem].notna()
             if mask_valid.any():
                 valores = df.loc[mask_valid, col_horario]
 
-                # Converte float (fração do dia) para datetime, se necessário
-                if pd.api.types.is_float_dtype(valores):
-                    t = valores.apply(excel_time_to_datetime)
+                # --- converter para datetime corretamente dependendo do dtype ---
+                if pd.api.types.is_numeric_dtype(valores):
+                    # caso Excel tenha salvo como fração do dia (float)
+                    t = excel_time_to_datetime_series(valores)
+                elif pd.api.types.is_datetime64_any_dtype(valores):
+                    t = pd.to_datetime(valores)
                 else:
-                    t = pd.to_datetime(valores, errors='coerce')
+                    # strings ou objetos: tenta parsear como HH:MM (mais seguro)
+                    t = pd.to_datetime(valores.astype(str), format="%H:%M", errors="coerce")
 
-                # Aplica regra da virada da noite
+                # --- regra da virada ---
                 has_night = (t.dt.hour >= 18).any()
                 has_early = (t.dt.hour < 10).any()
-                t_adj = t.mask(t.dt.hour < 10, t + pd.Timedelta(days=1)) if (has_night and has_early) else t
+                if has_night and has_early:
+                    t_adj = t.where(~(t.dt.hour < 10), t + pd.Timedelta(days=1))
+                else:
+                    t_adj = t
 
-                aux = df.loc[mask_valid, [col_ordem]].copy()
-                aux['horario_ajustado'] = t_adj.values
-                aux = aux.sort_values('horario_ajustado').reset_index()
-                aux['nova_ordem'] = range(1, len(aux) + 1)
+                # --- ordenar horários ajustados (passo 3) ---
+                sorted_times = t_adj.sort_values().reset_index(drop=True)  # Series de Timestamps
 
-                mapa_ordem_horario = dict(zip(aux['nova_ordem'], aux['horario_ajustado']))
+                # --- criar mapa 1..n -> horário (Timestamp) ---
+                mapa_horario = dict(zip(range(1, len(sorted_times) + 1), sorted_times))
 
-                df.loc[mask_valid, col_horario] = df.loc[mask_valid, col_ordem].map(mapa_ordem_horario)
+                # --- mapear usando os valores da coluna ORDEM (garantir int) ---
+                # converte a coluna ORDEM das linhas válidas para int (ex: '2'|'2.0' -> 2)
+                ord_series = pd.to_numeric(df.loc[mask_valid, col_ordem], errors="coerce").astype(int)
+                df.loc[mask_valid, col_horario] = ord_series.map(mapa_horario)
+                # fim do processamento do dia
 
-    # Converte colunas HORARIO para fração do dia (float) para exportar corretamente
+    # garantir que as colunas HORARIO* estejam em dtype datetime64 (para o ExcelWriter formatar)
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         if col_horario in df.columns:
-            dt_col = pd.to_datetime(df[col_horario], errors='coerce')
-            df[col_horario] = datetime_to_excel_time(dt_col)
+            df[col_horario] = pd.to_datetime(df[col_horario], errors="coerce")
 
-    st.dataframe(df.head())
- 
+    # manter ordem original das colunas religiosamente
+    df = df[original_cols]
+
+    # preparar o arquivo para download com formatação hh:mm
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
     novo_nome = f"{name}_ajustado.xlsx"
 
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sheet1')
-        workbook  = writer.book
-        worksheet = writer.sheets['Sheet1']
-
-        time_format = workbook.add_format({'num_format': 'hh:mm'})
-
-        for dia in dias:
-            col_horario = f"HORARIO{dia}"
-            if col_horario in df.columns:
-                col_idx = df.columns.get_loc(col_horario)
-                # Ajusta largura da coluna e aplica formato de hora
-                worksheet.set_column(col_idx, col_idx, 12, time_format)
-
+    with pd.ExcelWriter(output, engine="xlsxwriter", datetime_format="hh:mm") as writer:
+        df.to_excel(writer, index=False)
     output.seek(0)
 
     st.success("✅ Ajuste concluído!")
@@ -88,4 +87,3 @@ if uploaded_file is not None:
         file_name=novo_nome,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
