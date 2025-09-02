@@ -1,5 +1,10 @@
 import pandas as pd
 import datetime as dt
+import streamlit as st
+
+st.set_page_config(page_title="Ajuste de Horários", layout="wide")
+
+st.title("📊 Ajuste de Horários")
 
 # Upload do arquivo
 uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
@@ -9,8 +14,6 @@ if uploaded_file:
 
     st.subheader("Prévia dos Dados Originais")
     st.dataframe(df.head())
-
-
 # Função para converter valores em horário real
 def converter_para_horario(valor):
     try:
@@ -76,4 +79,5 @@ print(df[["HORARIO", "ORDEM"]].head(10))
 # Salvar em nova planilha
 df[["HORARIO", "ORDEM"]].to_excel("saida.xlsx", index=False)
 print("\nPlanilha 'saida.xlsx' gerada com sucesso!")
+
 
