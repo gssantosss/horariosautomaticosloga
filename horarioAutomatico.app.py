@@ -11,7 +11,7 @@ if uploaded_file:
     st.dataframe(df.head())
 
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
-    gap_threshold_min = st.number_input("Tamanho mínimo do gap (minutos)", value=60, min_value=1)
+    gap_threshold_min = 10  # mínimo de 10 minutos
 
     results = []
 
@@ -25,7 +25,7 @@ if uploaded_file:
             menor = horarios.min()
             maior = horarios.max()
 
-            # Detecta todos os gaps maiores que threshold
+            # Detecta todos os gaps maiores que 10 minutos
             diffs = horarios.diff().dt.total_seconds() / 60  # em minutos
             gap_indices = diffs[diffs >= gap_threshold_min].index
 
