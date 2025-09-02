@@ -23,8 +23,16 @@ if uploaded_file:
         # Calcula menor horário de cada coluna
         menores = {}
         for col in horario_cols:
-            # Converte para datetime para poder calcular min
-            temp = pd.to_datetime(df[col], errors='coerce')
+            series = df[col]
+            
+            # Se for float (fração do dia do Excel), converte
+            if pd.api.types.is_float_dtype(series):
+                temp = pd.to_timedelta(series, unit='d') + pd.Timestamp('1899-12-30')
+            else:
+                # Tenta converter strings para datetime
+                temp = pd.to_datetime(series, errors='coerce')
+            
+            # Pega menor horário válido
             if temp.notna().any():
                 menores[col] = temp.min().strftime("%H:%M")
             else:
