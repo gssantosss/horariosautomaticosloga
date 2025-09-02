@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 
-st.title("📂 Colunas HORARIO preenchidas + Menor e Maior horário + Ordenação")
+st.title("📂 Colunas HORARIO preenchidas + Menor e Maior horário + Ordenação individual")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
@@ -52,15 +52,15 @@ if uploaded_file:
             else:
                 extremos[col] = {"Menor": "Sem valor", "Maior": "Sem valor"}
         
-        # Exibe tabela com menor e maior horário
         st.subheader("⏱ Menor e Maior horário de cada coluna HORARIO")
-        st.table(pd.DataFrame(extremos).T)  # Transposta para ficar colunas como HORARIOxxx
+        st.table(pd.DataFrame(extremos).T)
         
-        # Ordena cada coluna HORARIO individualmente (crescente) e mantém só hora para exibição
+        # Ordena cada coluna HORARIO individualmente (crescente) - sem afetar outras colunas
         df_sorted = df.copy()
         for col in horario_cols:
-            df_sorted[col] = df_sorted[col].dt.strftime("%H:%M")  # só hora
-            df_sorted = df_sorted.sort_values(by=col, na_position='last')
+            sorted_col = df_sorted[col].dropna().sort_values(ascending=True).dt.strftime("%H:%M")
+            # Preenche de baixo pra cima (primeiro índice é menor horário)
+            df_sorted[col] = pd.Series(sorted_col.values, index=sorted_col.index)
         
-        st.subheader("📋 Colunas HORARIO preenchidas - Ordenadas por cada coluna")
+        st.subheader("📋 Colunas HORARIO preenchidas - Ordenadas individualmente")
         st.dataframe(df_sorted[horario_cols])
