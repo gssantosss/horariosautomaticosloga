@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 
-st.title("📂 Colunas HORARIO preenchidas + Menor horário")
+st.title("📂 Colunas HORARIO preenchidas + Menor e Maior horário + Ordenação")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
@@ -36,18 +36,30 @@ if uploaded_file:
     if not horario_cols:
         st.write("❌ Nenhuma coluna HORARIO preenchida encontrada.")
     else:
-        st.subheader("📋 Colunas HORARIO preenchidas")
-        st.dataframe(df[horario_cols])
-        
-        menores = {}
+        # Normaliza todos os horários
         for col in horario_cols:
-            # Normaliza todos os valores da coluna
-            temp = df[col].apply(parse_excel_time)
-            temp = temp.dropna()
-            if not temp.empty:
-                menores[col] = temp.min().strftime("%H:%M")
-            else:
-                menores[col] = "Sem valor"
+            df[col] = df[col].apply(parse_excel_time)
         
-        st.subheader("⏱ Menor horário de cada coluna HORARIO")
-        st.table(pd.DataFrame([menores]))
+        # Cria dicionário com menor e maior horário
+        extremos = {}
+        for col in horario_cols:
+            temp = df[col].dropna()
+            if not temp.empty:
+                extremos[col] = {
+                    "Menor": temp.min().strftime("%H:%M"),
+                    "Maior": temp.max().strftime("%H:%M")
+                }
+            else:
+                extremos[col] = {"Menor": "Sem valor", "Maior": "Sem valor"}
+        
+        # Exibe tabela com menor e maior horário
+        st.subheader("⏱ Menor e Maior horário de cada coluna HORARIO")
+        st.table(pd.DataFrame(extremos).T)  # Transposta para ficar colunas como HORARIOxxx
+        
+        # Ordena cada coluna HORARIO individualmente (crescente)
+        df_sorted = df.copy()
+        for col in horario_cols:
+            df_sorted = df_sorted.sort_values(by=col, na_position='last')
+        
+        st.subheader("📋 Colunas HORARIO preenchidas - Ordenadas por cada coluna")
+        st.dataframe(df_sorted[horario_cols])
