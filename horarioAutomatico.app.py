@@ -1,49 +1,33 @@
-import streamlit as st
 import pandas as pd
 
-st.title("Resumo de Horários com Gaps 🕒")
+# Carregar os dados
+df = pd.read_excel("upload.xlsx")
 
-uploaded_file = st.file_uploader("📂 Escolha a planilha Excel", type=["xlsx"])
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+# Pega só colunas que começam com HORARIO
+horario_cols = [col for col in df.columns if col.startswith("HORARIO")]
 
-    st.subheader("📋 Planilha carregada")
-    st.dataframe(df.head())
-
-    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
-    gap_threshold_min = 10  # mínimo de 10 minutos
-
-    resumo_texto = ""
-
-    for dia in dias:
-        col_horario = f"HORARIO{dia}"
-        if col_horario in df.columns:
-            # Forçar leitura como horário (HH:MM)
-            horarios = pd.to_datetime(df[col_horario], format="%H:%M", errors="coerce").dropna().sort_values()
-            if horarios.empty:
-                continue
-
-            menor = horarios.min().strftime("%H:%M")
-            maior = horarios.max().strftime("%H:%M")
-
-            # calcular gaps
-            diffs = horarios.diff().dt.total_seconds() / 60
-            gap_indices = diffs[diffs >= gap_threshold_min].index
-
-            gaps_txt = []
-            for i, idx in enumerate(gap_indices, start=1):
-                antes = horarios.loc[idx - 1].strftime("%H:%M")
-                depois = horarios.loc[idx].strftime("%H:%M")
-                gaps_txt.append(f"Gap{i}: {antes} → {depois}")
-
-            # montar texto do dia
-            resumo_texto += f"{dia}: Menor horário: {menor} | "
-            resumo_texto += " | ".join(gaps_txt) + " | " if gaps_txt else ""
-            resumo_texto += f"Maior horário: {maior}\n"
-
-    st.subheader("📑 Resumo Final")
-    st.text(resumo_texto)
-
-    # Botão de copiar
-    st.code(resumo_texto, language="text")
-    st.button("📋 Copiar resumo")
+for col in horario_cols:
+    # Tira valores vazios e converte pra datetime
+    horarios = pd.to_datetime(df[col], errors="coerce").dropna().sort_values().reset_index(drop=True)
+    
+    if horarios.empty:
+        continue
+    
+    menor = horarios.iloc[0].strftime("%H:%M")
+    maior = horarios.iloc[-1].strftime("%H:%M")
+    
+    gaps = []
+    for i in range(len(horarios) - 1):
+        diff = (horarios[i+1] - horarios[i]).total_seconds() / 60
+        if diff >= 10:  # gap mínimo de 10 minutos
+            antes = horarios[i].strftime("%H:%M")
+            depois = horarios[i+1].strftime("%H:%M")
+            gaps.append((antes, depois))
+    
+    # Monta saída
+    output = f"{col}: Menor horário: {menor} "
+    for j, (antes, depois) in enumerate(gaps, 1):
+        output += f"| Horário antes do gap{j}: {antes} | Horário depois do gap{j}: {depois} "
+    output += f"| Horário final: {maior}"
+    
+    print(output)
