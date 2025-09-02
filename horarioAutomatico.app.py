@@ -44,10 +44,10 @@ if uploaded_file:
                 if has_night and has_early:
                     subset.loc[subset[horario_col].dt.hour < 10, horario_col] += pd.Timedelta(days=1)
 
-                # Ordena pelo ORDEM original para ajustar horários
+                # Ordena pelo ORDEM original
                 subset = subset.sort_values(by=ordem_col)
 
-                # Intervalos uniformes entre o primeiro e último horário
+                # Intervalos uniformes
                 inicio = subset[horario_col].iloc[0]
                 fim = subset[horario_col].iloc[-1]
                 total_itens = len(subset)
@@ -62,7 +62,7 @@ if uploaded_file:
                         horarios_ajustados.append(proximo)
                     new_df.loc[subset.index, horario_col] = horarios_ajustados
 
-    # --- Preview: transforma para HH:MM apenas para exibir no Streamlit ---
+    # --- Preview no Streamlit: apenas HH:MM ---
     df_preview = new_df.copy()
     for col in df_preview.columns:
         if col.startswith("HORARIO"):
@@ -71,7 +71,7 @@ if uploaded_file:
     st.subheader("✅ Dados ajustados")
     st.dataframe(df_preview.head())
 
-    # --- Download: converte para datetime.time pra Excel mostrar apenas hora ---
+    # --- Preparar download: converte para datetime.time pra Excel ---
     for col in new_df.columns:
         if col.startswith("HORARIO"):
             new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.time
