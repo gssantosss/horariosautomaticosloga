@@ -7,7 +7,9 @@ st.set_page_config(page_title="Ajuste de Horários", layout="wide")
 st.title("📊 Ajuste de Horários")
 
 # Upload do arquivo
-uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
+uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"]) 
+if uploaded_file is not None: 
+    df = pd.read_excel(uploaded_file)
 
 # Função para converter valores em horário real
 def converter_para_horario(valor):
@@ -82,5 +84,6 @@ st.download_button(
     file_name=novo_nome,
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
 
