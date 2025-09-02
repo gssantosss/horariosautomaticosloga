@@ -35,9 +35,6 @@ def converter_para_horario(valor):
         return None
     return None
 
-# Carregar planilha
-df = pd.read_excel("upload.xlsx")
-
 # Garantir colunas certas
 df = df.rename(columns={df.columns[0]: "HORARIO", df.columns[1]: "ORDEM"})
 
@@ -85,4 +82,5 @@ st.download_button(
     file_name=novo_nome,
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
 
