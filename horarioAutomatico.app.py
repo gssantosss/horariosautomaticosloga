@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 
-st.title("📂 Colunas HORARIO preenchidas + Ordenação individual + Gaps")
+st.title("⏱ Mini tabela: Menor, Gaps e Maior horário de cada HORARIO")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
@@ -26,57 +26,50 @@ def parse_excel_time(val):
                 return None
     return None
 
-min_gap = timedelta(minutes=10)
-
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    
+
     # Detecta colunas HORARIO preenchidas
     horario_cols = [col for col in df.columns if col.upper().startswith("HORARIO")]
     horario_cols = [col for col in horario_cols if df[col].notna().any()]
-    
+
     if not horario_cols:
         st.write("❌ Nenhuma coluna HORARIO preenchida encontrada.")
     else:
         # Normaliza todos os horários
         for col in horario_cols:
             df[col] = df[col].apply(parse_excel_time)
-        
-        # --- Menor e Maior horário ---
-        extremos = {}
+
+        # Cria mini tabela
+        mini_tabela = {}
         for col in horario_cols:
-            temp = df[col].dropna()
-            if not temp.empty:
-                extremos[col] = {
-                    "Menor": temp.min().strftime("%H:%M"),
-                    "Maior": temp.max().strftime("%H:%M")
-                }
-            else:
-                extremos[col] = {"Menor": "Sem valor", "Maior": "Sem valor"}
-        
-        st.subheader("⏱ Menor e Maior horário de cada coluna HORARIO")
-        st.table(pd.DataFrame(extremos).T)
-        
-        # --- Horários antes de gaps acima de 10 minutos ---
-        gaps_dict = {}
-        for col in horario_cols:
-            temp = sorted([h for h in df[col] if h is not None])
-            gaps_before = []
+            temp = df[col].dropna().sort_values().reset_index(drop=True)
+            if temp.empty:
+                mini_tabela[col] = ["Sem valor"]
+                continue
+
+            # Menor horário
+            linha = [temp.iloc[0].strftime("%H:%M")]
+
+            # Horários antes de gaps > 10 min
             for i in range(1, len(temp)):
-                if temp[i] - temp[i-1] > min_gap:
-                    gaps_before.append(temp[i-1].strftime("%H:%M"))
-            gaps_dict[col] = gaps_before if gaps_before else ["Nenhum gap >10min"]
-        
-        st.subheader("⚡ Horários antes de gaps > 10 minutos")
-        st.table(pd.DataFrame(gaps_dict, index=[0]))
-        
-        # --- Ordena cada coluna individualmente ---
-        df_sorted = df.copy()
-        for col in horario_cols:
-            filled = df_sorted[col].dropna().sort_values(ascending=True).reset_index(drop=True)
-            sorted_col = pd.Series([pd.NaT]*len(df_sorted))
-            sorted_col[:len(filled)] = filled
-            df_sorted[col] = sorted_col.dt.strftime("%H:%M")
-        
-        st.subheader("📋 Colunas HORARIO preenchidas - Ordenadas individualmente")
-        st.dataframe(df_sorted[horario_cols])
+                diff = (temp.iloc[i] - temp.iloc[i-1]).total_seconds() / 60  # minutos
+                if diff > 10:
+                    linha.append(temp.iloc[i-1].strftime("%H:%M"))
+
+            # Maior horário
+            linha.append(temp.iloc[-1].strftime("%H:%M"))
+
+            mini_tabela[col] = linha
+
+        # Transforma em DataFrame com índice começando em 1
+        max_len = max(len(v) for v in mini_tabela.values())
+        for k in mini_tabela:
+            while len(mini_tabela[k]) < max_len:
+                mini_tabela[k].append("")
+
+        mini_df = pd.DataFrame(mini_tabela)
+        mini_df.index = range(1, len(mini_df)+1)
+
+        st.subheader("📊 Menor horário, horários antes de gaps >10min e maior horário")
+        st.dataframe(mini_df)
