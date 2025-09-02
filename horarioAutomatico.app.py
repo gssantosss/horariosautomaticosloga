@@ -2,20 +2,19 @@ import pandas as pd
 import streamlit as st
 from io import BytesIO
 import os
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
 def excel_time_to_datetime(t):
-    # Converte fração de dia do Excel em Timestamp
+    # Converte fração de dia do Excel em Timestamp datetime
     return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
-    st.write("📋 Planilha original carregada:")
-    st.dataframe(df.head())
-
+    
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
 
     for dia in dias:
@@ -46,20 +45,33 @@ if uploaded_file is not None:
                 aux = df.loc[mask_valid, [col_ordem]].copy()
                 aux['horario_ajustado'] = t_adj.values
                 aux = aux.sort_values('horario_ajustado').reset_index(drop=True)
-                aux['nova_ordem'] = range(1, len(aux) + 1)
+                aux['nova_ordem'] = range(1, len(aux)+1)
 
                 # Atualiza o horário original com horário ajustado
                 df.loc[mask_valid, col_horario] = aux['horario_ajustado'].values
 
-    # PREVIEW: converte para string HH:MM só para mostrar no Streamlit
+    # --- Preview com AgGrid ---
     df_preview = df.copy()
+    
+    # Converte todas as colunas HORARIO para datetime
     for dia in dias:
         col_horario = f"HORARIO{dia}"
         if col_horario in df_preview.columns:
-            df_preview[col_horario] = pd.to_datetime(df_preview[col_horario], errors='coerce').dt.strftime('%H:%M')
+            df_preview[col_horario] = pd.to_datetime(df_preview[col_horario], errors='coerce')
 
-    st.subheader("📊 Planilha ajustada (Preview):")
-    st.dataframe(df_preview.head())
+    gb = GridOptionsBuilder.from_dataframe(df_preview)
+    # Configura todas as colunas HORARIO como tipo hora, com relógio
+    for dia in dias:
+        col_horario = f"HORARIO{dia}"
+        if col_horario in df_preview.columns:
+            gb.configure_column(
+                col_horario, 
+                type=["timeColumnFilter"], 
+                valueFormatter="(params.value) ? new Date(params.value).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''"
+            )
+    gridOptions = gb.build()
+    st.subheader("📊 Planilha ajustada (Preview com relógio):")
+    AgGrid(df_preview, gridOptions=gridOptions)
 
     # DOWNLOAD: mantém datetime para Excel interpretar como hora
     output = BytesIO()
