@@ -1,83 +1,83 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
+from datetime import timedelta
 from io import BytesIO
-import os
 
-st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
+st.set_page_config(page_title="Ajuste de Horários", layout="wide")
+st.title("🕒 Ajuste Automático de Horários da Coleta")
+st.write("Faça upload da planilha, ajuste os horários de acordo com a ordem e baixe o resultado.")
 
-def excel_time_to_datetime(t):
-    # Converte fração de dia do Excel em Timestamp datetime
-    return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
+# Upload do arquivo
+uploaded_file = st.file_uploader("📂 Carregue sua planilha (Excel)", type=["xlsx"])
 
-uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
+# Input do tempo mínimo de pausa
+pause_threshold = st.number_input(
+    "Tempo mínimo de pausa (minutos)", 
+    min_value=1, max_value=120, value=10
+)
 
-if uploaded_file is not None:
+if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    
+
+    st.subheader("📊 Pré-visualização dos dados originais")
+    st.dataframe(df.head())
+
+    # Processamento
+    new_df = df.copy()
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
 
     for dia in dias:
-        col_horario = f"HORARIO{dia}"
-        col_ordem = f"ORDEM{dia}"
+        ordem_col = f"ORDEM{dia}"
+        horario_col = f"HORARIO{dia}"
 
-        if col_horario in df.columns and col_ordem in df.columns:
-            mask_valid = df[col_horario].notna() & df[col_ordem].notna()
+        if ordem_col in df.columns and horario_col in df.columns:
+            mask_valid = df[ordem_col].notna() & df[horario_col].notna()
             if mask_valid.any():
-                valores = df.loc[mask_valid, col_horario]
+                subset = df.loc[mask_valid, [ordem_col, horario_col]].copy()
 
-                # Converte float (fração do dia) ou string para datetime
-                if pd.api.types.is_float_dtype(valores):
-                    t = valores.apply(excel_time_to_datetime)
-                else:
-                    t = pd.to_datetime(valores, errors='coerce')
+                # Converte horários para datetime
+                subset[horario_col] = pd.to_datetime(subset[horario_col].astype(str), errors='coerce')
 
-                # Ajuste virada da noite
-                has_night = (t.dt.hour >= 18).any()
-                has_early = (t.dt.hour < 10).any()
-                t_adj = t.copy()
+                # Detecta virada da noite
+                has_night = (subset[horario_col].dt.hour >= 18).any()
+                has_early = (subset[horario_col].dt.hour < 10).any()
                 if has_night and has_early:
-                    t_adj[t.dt.hour < 10] += pd.Timedelta(days=1)
+                    subset.loc[subset[horario_col].dt.hour < 10, horario_col] += pd.Timedelta(days=1)
 
-                # Ordena pelos horários ajustados
-                aux = df.loc[mask_valid, [col_ordem]].copy()
-                aux['horario_ajustado'] = t_adj.values
-                aux = aux.sort_values('horario_ajustado').reset_index(drop=True)
-                aux['nova_ordem'] = range(1, len(aux)+1)
+                # Ordena por horário ajustado
+                subset = subset.sort_values(by=horario_col).reset_index()
+                subset['nova_ordem'] = range(1, len(subset)+1)
 
-                # Atualiza o horário original
-                df.loc[mask_valid, col_horario] = aux['horario_ajustado'].values
+                # Atualiza horário e ordem no dataframe final
+                new_df.loc[subset['index'], horario_col] = subset[horario_col].values
+                new_df.loc[subset['index'], ordem_col] = subset['nova_ordem'].values
 
-    # --- Transformar para string HH:MM pra aparecer no Streamlit ---
-    df_preview = df.copy()
-    for dia in dias:
-        col_horario = f"HORARIO{dia}"
-        if col_horario in df_preview.columns:
-            df_preview[col_horario] = pd.to_datetime(df_preview[col_horario], errors='coerce').dt.strftime('%H:%M')
+    # --- Preview: transforma para HH:MM apenas para exibir no Streamlit ---
+    df_preview = new_df.copy()
+    for col in df_preview.columns:
+        if col.startswith("HORARIO"):
+            df_preview[col] = pd.to_datetime(df_preview[col], errors='coerce').dt.strftime("%H:%M")
 
-    st.subheader("📊 Planilha ajustada (Preview):")
-    st.dataframe(df_preview)
+    st.subheader("✅ Dados ajustados")
+    st.dataframe(df_preview.head())
 
-    # --- Download mantendo hora formatada no Excel ---
+    # --- Download mantendo datetime para Excel ---
     output = BytesIO()
-    original_name = uploaded_file.name
-    name, ext = os.path.splitext(original_name)
-    novo_nome = f"{name}_ajustado.xlsx"
-
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name="Ajustado")
+    nome_arquivo = uploaded_file.name.replace(".xlsx", "_ajustada.xlsx")
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        new_df.to_excel(writer, index=False, sheet_name="Ajustado")
         workbook = writer.book
         worksheet = writer.sheets["Ajustado"]
 
-        # Formata colunas HORARIO como hh:mm no Excel
-        for i, col in enumerate(df.columns):
+        # Formata colunas HORARIO como hh:mm
+        for i, col in enumerate(new_df.columns):
             if col.startswith("HORARIO"):
                 worksheet.set_column(i, i, 8, workbook.add_format({"num_format": "hh:mm"}))
 
     output.seek(0)
-    st.success("✅ Ajuste concluído!")
     st.download_button(
-        label="⬇️ Baixar planilha ajustada",
+        label="📥 Baixar planilha ajustada",
         data=output,
-        file_name=novo_nome,
+        file_name=nome_arquivo,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
