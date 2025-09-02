@@ -15,17 +15,15 @@ if uploaded_file:
     resultados = []
 
     for col_horario in horario_cols:
-        # deduz coluna ORDEM correspondente
         dia = col_horario.replace("HORARIO", "")
         ordem_col = f"ORDEM{dia}"
         if ordem_col not in df.columns:
             continue
         
-        # pega apenas linhas com horário válido
         subset = df[[col_horario, ordem_col]].dropna()
         
-        # converte para datetime.time
-        subset[col_horario] = pd.to_datetime(subset[col_horario], errors='coerce').dt.time
+        # Mantém datetime64[ns] internamente
+        subset[col_horario] = pd.to_datetime(subset[col_horario], errors='coerce')
         subset = subset.dropna(subset=[col_horario])
         
         if subset.empty:
