@@ -1,89 +1,87 @@
 import pandas as pd
-import datetime as dt
 import streamlit as st
+from io import BytesIO
+import os
 
-st.set_page_config(page_title="Ajuste de Horários", layout="wide")
+st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
-st.title("📊 Ajuste de Horários")
+# Converte número decimal do Excel para Timestamp datetime
+def excel_time_to_datetime(t):
+    return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
 
-# Upload do arquivo
-uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"]) 
-if uploaded_file is not None: 
+uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
+
+if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
+    st.write("📋 Planilha original carregada:")
+    st.dataframe(df.head())
 
-# Função para converter valores em horário real
-def converter_para_horario(valor):
-    try:
-        if pd.isna(valor):
-            return None
+    dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
 
-        # Caso venha como número decimal do Excel (ex: 0.75 = 18:00)
-        if isinstance(valor, (int, float)):
-            horas = int(valor * 24)
-            minutos = int((valor * 24 * 60) % 60)
-            return dt.time(horas, minutos)
+    for dia in dias:
+        col_horario = f"HORARIO{dia}"
+        col_ordem = f"ORDEM{dia}"
 
-        # Caso já seja datetime/time
-        if isinstance(valor, dt.time):
-            return valor
-        if isinstance(valor, dt.datetime):
-            return valor.time()
+        if col_horario in df.columns and col_ordem in df.columns:
+            mask_valid = df[col_horario].notna() & df[col_ordem].notna()
 
-        # Caso venha como string "HH:MM"
-        if isinstance(valor, str):
-            return dt.datetime.strptime(valor.strip(), "%H:%M").time()
+            if mask_valid.any():
+                valores = df.loc[mask_valid, col_horario]
 
-    except:
-        return None
-    return None
+                # Converte float (fração do dia) ou string para datetime
+                if pd.api.types.is_float_dtype(valores):
+                    t = valores.apply(excel_time_to_datetime)
+                else:
+                    t = pd.to_datetime(valores, errors='coerce')
 
-# Garantir colunas certas
-df = df.rename(columns={df.columns[0]: "HORARIO", df.columns[1]: "ORDEM"})
+                # Detecta virada da noite
+                has_night = (t.dt.hour >= 18).any()
+                has_early = (t.dt.hour < 10).any()
 
-# Converte a coluna de horários
-df["HORARIO"] = df["HORARIO"].apply(converter_para_horario)
+                t_adj = t.copy()
+                if has_night and has_early:
+                    t_adj[t.dt.hour < 10] += pd.Timedelta(days=1)
 
-# Ajustar virada da noite
-horarios = []
-for h in df["HORARIO"]:
-    if h is None:
-        horarios.append(None)
-    else:
-        horarios.append(dt.datetime.combine(dt.date.today(), h))
+                # Ordena pelos horários ajustados
+                aux = df.loc[mask_valid, [col_ordem]].copy()
+                aux['horario_ajustado'] = t_adj.values
+                aux = aux.sort_values('horario_ajustado').reset_index(drop=True)
+                aux['nova_ordem'] = range(1, len(aux) + 1)
 
-df["HORARIO_DT"] = horarios
+                # Atualiza o horário original com horário ajustado
+                df.loc[mask_valid, col_horario] = aux['horario_ajustado'].values
 
-# Detecta virada da noite (se tem horários tarde e cedo misturados)
-if any(h and h.hour >= 18 for h in df["HORARIO_DT"]) and any(h and h.hour < 10 for h in df["HORARIO_DT"]):
-    df.loc[df["HORARIO_DT"].dt.hour < 10, "HORARIO_DT"] += dt.timedelta(days=1)
+    # Mantém só hora:minuto para preview
+    for dia in dias:
+        col_horario = f"HORARIO{dia}"
+        if col_horario in df.columns:
+            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce').dt.time
 
-# Ordena pelos horários ajustados
-df = df.sort_values(by="HORARIO_DT").reset_index(drop=True)
+    st.subheader("📊 Planilha ajustada:")
+    st.dataframe(df.head())
 
-# Reatribui nova ordem
-df["ORDEM"] = range(1, len(df) + 1)
+    # Preparar para download
+    output = BytesIO()
+    original_name = uploaded_file.name
+    name, ext = os.path.splitext(original_name)
+    novo_nome = f"{name}_ajustado.xlsx"
 
-# Ajusta coluna final de horário (só o time, que o Excel entende)
-df["HORARIO"] = df["HORARIO_DT"].dt.time
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name="Ajustado")
 
-# Preview antes de salvar
-print("\nPrévia do resultado final:")
-print(df[["HORARIO", "ORDEM"]].head(10))
+        workbook = writer.book
+        worksheet = writer.sheets["Ajustado"]
 
-with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    df.to_excel(writer, index=False, sheet_name="Ajustado")
+        # Formata colunas HORARIO como hh:mm
+        for i, col in enumerate(df.columns):
+            if col.startswith("HORARIO"):
+                worksheet.set_column(i, i, 8, workbook.add_format({"num_format": "hh:mm"}))
 
-    # força formatação hh:mm em todas as colunas HORARIO
-    for i, col in enumerate(df.columns):
-        if col.startswith("HORARIO"):
-            worksheet.set_column(i, i, 8, workbook.add_format({"num_format": "hh:mm"}))
-
-st.download_button(
-    label="⬇️ Baixar planilha ajustada",
-    data=output,
-    file_name=novo_nome,
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
-
-
+    output.seek(0)
+    st.success("✅ Ajuste concluído!")
+    st.download_button(
+        label="⬇️ Baixar planilha ajustada",
+        data=output,
+        file_name=novo_nome,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
