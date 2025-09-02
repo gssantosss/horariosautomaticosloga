@@ -61,7 +61,11 @@ if uploaded_file:
     st.subheader("✅ Dados ajustados")
     st.dataframe(df_preview.head())
 
-    # --- Download mantendo datetime para Excel ---
+    # --- Download: converte para datetime.time pra Excel mostrar apenas hora ---
+    for col in new_df.columns:
+        if col.startswith("HORARIO"):
+            new_df[col] = pd.to_datetime(new_df[col], errors='coerce').dt.time
+
     output = BytesIO()
     nome_arquivo = uploaded_file.name.replace(".xlsx", "_ajustada.xlsx")
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
