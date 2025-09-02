@@ -1,39 +1,50 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime, time, timedelta
 
 st.title("📂 Colunas HORARIO preenchidas + Menor horário")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
+def parse_excel_time(val):
+    """Converte valores de Excel (float), datetime.time ou string para datetime"""
+    if pd.isna(val):
+        return None
+    if isinstance(val, float):  # Excel fraction
+        return datetime(1899, 12, 30) + timedelta(days=val)
+    if isinstance(val, time):
+        return datetime.combine(datetime.today(), val)
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.strptime(val.strip(), "%H:%M:%S")
+        except:
+            try:
+                return datetime.strptime(val.strip(), "%H:%M")
+            except:
+                return None
+    return None
+
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
     
-    # Detecta colunas HORARIO com pelo menos 1 valor
+    # Detecta colunas HORARIO preenchidas
     horario_cols = [col for col in df.columns if col.upper().startswith("HORARIO")]
     horario_cols = [col for col in horario_cols if df[col].notna().any()]
     
     if not horario_cols:
         st.write("❌ Nenhuma coluna HORARIO preenchida encontrada.")
     else:
-        # Exibe colunas HORARIO preenchidas
-        df_horarios = df[horario_cols]
         st.subheader("📋 Colunas HORARIO preenchidas")
-        st.dataframe(df_horarios)
+        st.dataframe(df[horario_cols])
         
-        # Calcula menor horário de cada coluna
         menores = {}
         for col in horario_cols:
-            series = df[col]
-            
-            # Se for float (fração do dia do Excel), converte
-            if pd.api.types.is_float_dtype(series):
-                temp = pd.to_timedelta(series, unit='d') + pd.Timestamp('1899-12-30')
-            else:
-                # Tenta converter strings para datetime
-                temp = pd.to_datetime(series, errors='coerce')
-            
-            # Pega menor horário válido
-            if temp.notna().any():
+            # Normaliza todos os valores da coluna
+            temp = df[col].apply(parse_excel_time)
+            temp = temp.dropna()
+            if not temp.empty:
                 menores[col] = temp.min().strftime("%H:%M")
             else:
                 menores[col] = "Sem valor"
