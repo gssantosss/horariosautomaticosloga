@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 
-st.title("⏱ Mini tabela: Menor, Gaps e Maior horário de cada HORARIO")
+st.title("⏱ Mini tabela: Menor, Antes e Depois dos Gaps, Maior horário")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
@@ -51,18 +51,19 @@ if uploaded_file:
             # Menor horário
             linha = [temp.iloc[0].strftime("%H:%M")]
 
-            # Horários antes de gaps > 10 min
+            # Horários antes e depois de gaps > 10 min
             for i in range(1, len(temp)):
                 diff = (temp.iloc[i] - temp.iloc[i-1]).total_seconds() / 60  # minutos
                 if diff > 10:
-                    linha.append(temp.iloc[i-1].strftime("%H:%M"))
+                    linha.append(temp.iloc[i-1].strftime("%H:%M"))  # antes do gap
+                    linha.append(temp.iloc[i].strftime("%H:%M"))    # depois do gap
 
             # Maior horário
             linha.append(temp.iloc[-1].strftime("%H:%M"))
 
             mini_tabela[col] = linha
 
-        # Transforma em DataFrame com índice começando em 1
+        # Normaliza comprimento das listas
         max_len = max(len(v) for v in mini_tabela.values())
         for k in mini_tabela:
             while len(mini_tabela[k]) < max_len:
@@ -71,5 +72,5 @@ if uploaded_file:
         mini_df = pd.DataFrame(mini_tabela)
         mini_df.index = range(1, len(mini_df)+1)
 
-        st.subheader("📊 Menor horário, horários antes de gaps >10min e maior horário")
+        st.subheader("📊 Menor horário, horários antes e depois de gaps >10min, maior horário")
         st.dataframe(mini_df)
