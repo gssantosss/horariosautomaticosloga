@@ -44,10 +44,10 @@ if uploaded_file:
                 if has_night and has_early:
                     subset.loc[subset[horario_col].dt.hour < 10, horario_col] += pd.Timedelta(days=1)
 
-                # Ordena pelo ORDEM original
+                # Ordena horários de acordo com a ORDEM existente
                 subset = subset.sort_values(by=ordem_col)
 
-                # Intervalos uniformes
+                # Ajusta os horários uniformemente entre o primeiro e o último
                 inicio = subset[horario_col].iloc[0]
                 fim = subset[horario_col].iloc[-1]
                 total_itens = len(subset)
@@ -60,6 +60,8 @@ if uploaded_file:
                         if gap_original >= timedelta(minutes=pause_threshold):
                             proximo = horarios_ajustados[-1] + gap_original
                         horarios_ajustados.append(proximo)
+
+                    # Atualiza apenas os horários no dataframe final
                     new_df.loc[subset.index, horario_col] = horarios_ajustados
 
     # --- Preview no Streamlit: apenas HH:MM ---
