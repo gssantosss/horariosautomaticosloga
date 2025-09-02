@@ -9,11 +9,9 @@ st.title("📊 Ajuste de Horários")
 # Upload do arquivo
 uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+st.write("📋 Planilha original carregada:")
+st.dataframe(df.head())
 
-    st.subheader("Prévia dos Dados Originais")
-    st.dataframe(df.head())
 # Função para converter valores em horário real
 def converter_para_horario(valor):
     try:
@@ -76,8 +74,17 @@ df["HORARIO"] = df["HORARIO_DT"].dt.time
 print("\nPrévia do resultado final:")
 print(df[["HORARIO", "ORDEM"]].head(10))
 
-# Salvar em nova planilha
-df[["HORARIO", "ORDEM"]].to_excel("saida.xlsx", index=False)
-print("\nPlanilha 'saida.xlsx' gerada com sucesso!")
+with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    df.to_excel(writer, index=False, sheet_name="Ajustado")
 
+    # força formatação hh:mm em todas as colunas HORARIO
+    for i, col in enumerate(df.columns):
+        if col.startswith("HORARIO"):
+            worksheet.set_column(i, i, 8, workbook.add_format({"num_format": "hh:mm"}))
 
+st.download_button(
+    label="⬇️ Baixar planilha ajustada",
+    data=output,
+    file_name=novo_nome,
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
