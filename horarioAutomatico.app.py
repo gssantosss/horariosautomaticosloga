@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 
-st.title("📊 Mini tabela HORARIO + PROCV para ORDEM")
+st.title("📊 Mini tabela HORARIO + PROCV + Contagem de Valores")
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
 
@@ -74,8 +74,12 @@ if uploaded_file:
             while len(mini_tabela[k]) < max_len:
                 mini_tabela[k].append("")
 
+        # Adiciona coluna Cont.Valores
+        cont_valores = [len([v for v in mini_tabela[horario_cols[0]] if v != ""])] * max_len
+        mini_tabela["Cont.Valores"] = cont_valores
+
         mini_df = pd.DataFrame(mini_tabela)
         mini_df.index = range(1, len(mini_df)+1)
 
-        st.subheader("📊 Mini tabela HORARIO + ORDEM (PROCV)")
+        st.subheader("📊 Mini tabela HORARIO + ORDEM + Cont.Valores")
         st.dataframe(mini_df)
