@@ -5,8 +5,8 @@ import os
 
 st.title("Ajuste de Horários - Virada da Noite 🌙➡️☀️")
 
-# Converte número decimal do Excel para Timestamp datetime
 def excel_time_to_datetime(t):
+    # Converte fração de dia do Excel em Timestamp
     return pd.to_timedelta(t, unit='d') + pd.Timestamp('1899-12-30')
 
 uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
@@ -51,16 +51,17 @@ if uploaded_file is not None:
                 # Atualiza o horário original com horário ajustado
                 df.loc[mask_valid, col_horario] = aux['horario_ajustado'].values
 
-    # Mantém só hora:minuto para preview
+    # PREVIEW: converte para string HH:MM só para mostrar no Streamlit
+    df_preview = df.copy()
     for dia in dias:
         col_horario = f"HORARIO{dia}"
-        if col_horario in df.columns:
-            df[col_horario] = pd.to_datetime(df[col_horario], errors='coerce').dt.time
+        if col_horario in df_preview.columns:
+            df_preview[col_horario] = pd.to_datetime(df_preview[col_horario], errors='coerce').dt.strftime('%H:%M')
 
-    st.subheader("📊 Planilha ajustada:")
-    st.dataframe(df.head())
+    st.subheader("📊 Planilha ajustada (Preview):")
+    st.dataframe(df_preview.head())
 
-    # Preparar para download
+    # DOWNLOAD: mantém datetime para Excel interpretar como hora
     output = BytesIO()
     original_name = uploaded_file.name
     name, ext = os.path.splitext(original_name)
@@ -68,7 +69,6 @@ if uploaded_file is not None:
 
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name="Ajustado")
-
         workbook = writer.book
         worksheet = writer.sheets["Ajustado"]
 
