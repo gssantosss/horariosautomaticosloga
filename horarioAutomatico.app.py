@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("Análise de Horários por Dia com Gaps 🕒")
+st.title("Resumo de Horários com Gaps 🕒")
 
 uploaded_file = st.file_uploader("📂 Escolha a planilha Excel", type=["xlsx"])
 if uploaded_file:
@@ -13,7 +13,7 @@ if uploaded_file:
     dias = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"]
     gap_threshold_min = 10  # mínimo de 10 minutos
 
-    results = []
+    resumo_texto = ""
 
     for dia in dias:
         col_horario = f"HORARIO{dia}"
@@ -22,26 +22,21 @@ if uploaded_file:
             if horarios.empty:
                 continue
 
-            menor = horarios.min()
-            maior = horarios.max()
+            menor = horarios.min().strftime("%H:%M")
+            maior = horarios.max().strftime("%H:%M")
 
-            # Detecta todos os gaps maiores que 10 minutos
-            diffs = horarios.diff().dt.total_seconds() / 60  # em minutos
+            diffs = horarios.diff().dt.total_seconds() / 60
             gap_indices = diffs[diffs >= gap_threshold_min].index
 
-            # Lista todos os pares antes/depois do gap
-            gaps = []
-            for idx in gap_indices:
-                antes = horarios.loc[idx - 1]
-                depois = horarios.loc[idx]
-                gaps.append(f"{antes.strftime('%H:%M')} → {depois.strftime('%H:%M')}")
+            gaps_txt = []
+            for i, idx in enumerate(gap_indices, start=1):
+                antes = horarios.loc[idx - 1].strftime("%H:%M")
+                depois = horarios.loc[idx].strftime("%H:%M")
+                gaps_txt.append(f"Gap{i}: {antes} → {depois}")
 
-            results.append({
-                "Dia": dia,
-                "Menor Horário": menor.strftime("%H:%M"),
-                "Gaps": ", ".join(gaps) if gaps else "-",
-                "Maior Horário": maior.strftime("%H:%M")
-            })
+            resumo_texto += f"{dia}: Menor horário: {menor} | "
+            resumo_texto += " | ".join(gaps_txt) + " | " if gaps_txt else ""
+            resumo_texto += f"Maior horário: {maior}\n"
 
-    st.subheader("📊 Resumo de Horários por Dia")
-    st.dataframe(pd.DataFrame(results))
+    st.subheader("📑 Resumo Final")
+    st.text(resumo_texto)
