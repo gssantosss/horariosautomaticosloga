@@ -9,9 +9,6 @@ st.title("📊 Ajuste de Horários")
 # Upload do arquivo
 uploaded_file = st.file_uploader("Faça upload do arquivo Excel", type=["xlsx"])
 
-st.write("📋 Planilha original carregada:")
-st.dataframe(df.head())
-
 # Função para converter valores em horário real
 def converter_para_horario(valor):
     try:
@@ -88,3 +85,4 @@ st.download_button(
     file_name=novo_nome,
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
