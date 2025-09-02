@@ -1,5 +1,4 @@
 pandas
 streamlit
-openpyxl
-st_aggrid
-
+streamlit-aggrid
+xlsxwriter
