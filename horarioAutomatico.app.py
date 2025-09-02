@@ -56,9 +56,10 @@ if uploaded_file:
         st.subheader("⏱ Menor e Maior horário de cada coluna HORARIO")
         st.table(pd.DataFrame(extremos).T)  # Transposta para ficar colunas como HORARIOxxx
         
-        # Ordena cada coluna HORARIO individualmente (crescente)
+        # Ordena cada coluna HORARIO individualmente (crescente) e mantém só hora para exibição
         df_sorted = df.copy()
         for col in horario_cols:
+            df_sorted[col] = df_sorted[col].dt.strftime("%H:%M")  # só hora
             df_sorted = df_sorted.sort_values(by=col, na_position='last')
         
         st.subheader("📋 Colunas HORARIO preenchidas - Ordenadas por cada coluna")
