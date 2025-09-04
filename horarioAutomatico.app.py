@@ -282,3 +282,4 @@ if uploaded_file is not None:
         st.exception(e)
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
+    st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
