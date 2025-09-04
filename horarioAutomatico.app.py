@@ -91,6 +91,48 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     bio.seek(0)
     return bio.read()
 
+def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
+    """
+    Monta mini tabelas por dia contendo apenas registros válidos:
+    - HORARIO<dia> (texto hh:mm), ORDEM<dia> (Int64), OBS<dia> (vazio)
+    - Ordena por HORARIO<dia> (crescente), de forma independente por dia
+    - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } somente para dias com dados
+    """
+    tabelas = {}
+    for dia in DIAS:
+        hcol = f'HORARIO{dia}'
+        ocol = f'ORDEM{dia}'
+
+        # Se o arquivo não tiver as colunas, pula o dia
+        if hcol not in df_raw.columns and ocol not in df_raw.columns:
+            continue
+
+        # Séries (sem mutar df_raw)
+        ser_h = df_raw[hcol] if hcol in df_raw.columns else pd.Series([pd.NA]*len(df_raw), index=df_raw.index)
+        ser_o = df_raw[ocol] if ocol in df_raw.columns else pd.Series([pd.NA]*len(df_raw), index=df_raw.index)
+
+        # Normaliza horário -> 'hh:mm' (texto); ORDEM -> numérico
+        horarios = ser_h.apply(to_hhmm)
+        ordens   = pd.to_numeric(ser_o, errors='coerce').astype('Int64')
+
+        # Apenas válidos: horário não vazio E ordem não nula
+        mask_validos = horarios.ne('') & ordens.notna()
+        if not mask_validos.any():
+            continue
+
+        df_dia = pd.DataFrame({
+            f'HORARIO{dia}': horarios[mask_validos].values,
+            f'ORDEM{dia}'  : ordens[mask_validos].values,
+        })
+
+        # Ordenação por horário (como 'HH:MM' está zero-padded, ordenação lexicográfica funciona)
+        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+
+        # OBS vazia (vai ser preenchida automaticamente em um próximo passo)
+        df_dia[f'OBS{dia}'] = ''
+
+        tabelas[dia] = df_dia.reset_index(drop=True)
+
 # ------------------------------------------------------------
 # Processamento principal (normalização) - sem alterar df_raw
 # ------------------------------------------------------------
@@ -236,6 +278,23 @@ uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)"
 
 if uploaded_file is not None:
     try:
+        # Prévia completa por dia (somente válidos)
+        st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
+        
+        tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+        
+        if not tabelas_por_dia:
+            st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
+        else:
+            for dia in DIAS:
+                if dia in tabelas_por_dia:
+                    st.markdown(f"**{dia}**")
+                    st.dataframe(
+                        tabelas_por_dia[dia],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
         xls = pd.ExcelFile(uploaded_file)
         aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
         df_raw = pd.read_excel(uploaded_file, sheet_name=aba_dados)
@@ -253,17 +312,19 @@ if uploaded_file is not None:
         st.dataframe(tabela_h, use_container_width=True, hide_index=True)
 
         # Download do Excel apenas com 'agenda_por_dia'
-        out_bytes = montar_excel_somente_agenda(agenda)
-        st.download_button(
-            label="⬇️ Baixar Excel (agenda_por_dia)",
-            data=out_bytes,
-            file_name="roteiro_normalizado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        # (removido por hora)
+        # out_bytes = montar_excel_somente_agenda(agenda)
+        # st.download_button(
+        #     label="⬇️ Baixar Excel (agenda_por_dia)",
+        #     data=out_bytes,
+        #     file_name="roteiro_normalizado.xlsx",
+        #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # )
 
     except Exception as e:
         st.exception(e)
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
