@@ -99,14 +99,6 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
     - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } para todos os dias com dados
     """
     tabelas = {}
-    
-    def horario_para_minutos(hhmm: str) -> int:
-        """Converte 'hh:mm' para minutos desde 00:00."""
-        m = re.match(r'^(\d{2}):(\d{2})$', hhmm)
-        if m:
-            return int(m.group(1)) * 60 + int(m.group(2))
-        return -1  # inválido
-
     for dia in DIAS:
         hcol = f'HORARIO{dia}'
         ocol = f'ORDEM{dia}'
@@ -131,7 +123,7 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         })
 
         df_dia[f'OBS{dia}'] = ''
-
+        
         # Preenche OBS com 'Menor Horário' e 'Maior Horário'
         horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
         if horarios_validos:
@@ -140,17 +132,18 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
             df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
             df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
 
-        # Detecta gaps maiores que 10 minutos
-        horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos)
-        diffs = horarios_minutos.diff().fillna(0).astype(int)
-        gap_indices = diffs[diffs > 10].index
+        # Detecta gaps maiores que 10 minutos entre horários consecutivos
+        def horario_para_minutos(hhmm: str) -> int:
+            partes = hhmm.split(':')
+            return int(partes[0]) * 60 + int(partes[1]) if len(partes) == 2 else -1
 
-        for i, idx in enumerate(gap_indices, start=1):
-            if idx > 0:
-                df_dia.at[idx - 1, f'OBS{dia}'] += f' GAP{i}'
-                df_dia.at[idx, f'OBS{dia}'] += f' GAP{i}'
-
-        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+        horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos).tolist()
+        for i in range(1, len(horarios_minutos)):
+            diff = horarios_minutos[i] - horarios_minutos[i-1]
+            if diff > 10:
+                df_dia.at[i-1, f'OBS{dia}'] += f' GAP{i}'
+                df_dia.at[i, f'OBS{dia}'] += f' GAP{i}'
+df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
         tabelas[dia] = df_dia.reset_index(drop=True)
 
     return tabelas
