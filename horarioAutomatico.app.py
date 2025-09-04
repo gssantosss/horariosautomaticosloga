@@ -102,9 +102,6 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         return -1  # inválido
 
     for dia in DIAS:
-
-    tabelas = {}
-    for dia in DIAS:
         hcol = f'HORARIO{dia}'
         ocol = f'ORDEM{dia}'
 
@@ -336,4 +333,5 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
