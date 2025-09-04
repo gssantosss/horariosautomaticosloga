@@ -278,26 +278,33 @@ uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)"
 
 if uploaded_file is not None:
     try:
-     # Prévia completa por dia (somente válidos)
-    st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
-            
-    tabelas_por_dia = construir_tabelas_por_dia(df_raw)
-            
-if not tabelas_por_dia:
-    st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
-else:
-    for dia in DIAS:
-        if dia in tabelas_por_dia:
-            st.markdown(f"**{dia}**")
-            st.dataframe(
-                tabelas_por_dia[dia],
-                use_container_width=True,
-                hide_index=True)
-
+        # 1) Carregar a aba correta e o df_raw
         xls = pd.ExcelFile(uploaded_file)
         aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
         df_raw = pd.read_excel(uploaded_file, sheet_name=aba_dados)
 
+        # 2) Prévia completa por dia (somente válidos)
+        st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
+        tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+
+        # 3) Renderização das mini tabelas
+        if not tabelas_por_dia:
+            st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
+        else:
+            for dia in DIAS:
+                if dia in tabelas_por_dia:
+                    st.markdown(f"**{dia}**")
+                    st.dataframe(
+                        tabelas_por_dia[dia],
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+    except Exception as e:
+        st.exception(e)
+        st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
+else:
+    st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
         # Processamento (sem alterar df_raw; sem colunas extras)
         agenda = processar_df_sem_mutar(df_raw)
 
@@ -325,6 +332,7 @@ else:
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
