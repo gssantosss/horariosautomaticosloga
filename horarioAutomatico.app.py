@@ -16,13 +16,11 @@ def parse_excel_time(val):
     if isinstance(val, datetime):
         return val
     if isinstance(val, str):
-        try:
-            return datetime.strptime(val.strip(), "%H:%M:%S")
-        except:
+        for fmt in ["%H:%M:%S", "%H:%M"]:
             try:
-                return datetime.strptime(val.strip(), "%H:%M")
+                return datetime.strptime(val.strip(), fmt)
             except:
-                return None
+                pass
     return None
 
 if uploaded_file:
@@ -35,47 +33,62 @@ if uploaded_file:
     if not horario_cols:
         st.write("❌ Nenhuma coluna HORARIO preenchida encontrada.")
     else:
+        # Normaliza horários
         for col in horario_cols:
             df[col] = df[col].apply(parse_excel_time)
 
         mini_tabela = {}
+
+        max_gaps = 0  # para alinhar linhas entre colunas
         for col in horario_cols:
             ordem_col = col.replace("HORARIO", "ORDEM")
             temp = df[[col, ordem_col]].dropna().sort_values(by=col).reset_index(drop=True)
 
-            if temp.empty:
-                mini_tabela[col] = []
-                mini_tabela[col + "_ORDEM"] = []
-                continue
+            horarios_fmt = []
+            ordens_fmt = []
 
-            # Menor horário
-            horarios = [temp[col].iloc[0]]
-            ordens = [temp[ordem_col].iloc[0]]
+            if not temp.empty:
+                # INÍCIO
+                horarios_fmt.append(temp[col].iloc[0].strftime("%H:%M"))
+                ordens_fmt.append(temp[ordem_col].iloc[0])
 
-            # Horários antes e depois de gaps >10min
-            for i in range(1, len(temp)):
-                diff = (temp[col].iloc[i] - temp[col].iloc[i-1]).total_seconds() / 60
-                if diff > 10:
-                    horarios.append(temp[col].iloc[i-1])  # antes do gap
-                    ordens.append(temp[ordem_col].iloc[i-1])
-                    horarios.append(temp[col].iloc[i])    # depois do gap
-                    ordens.append(temp[ordem_col].iloc[i])
+                # GAPs
+                gap_count = 0
+                for i in range(1, len(temp)):
+                    diff = (temp[col].iloc[i] - temp[col].iloc[i-1]).total_seconds() / 60
+                    if diff > 10:
+                        gap_count += 1
+                        # ANTERIOR GAP
+                        horarios_fmt.append(temp[col].iloc[i-1].strftime("%H:%M"))
+                        ordens_fmt.append(temp[ordem_col].iloc[i-1])
+                        # POSTERIOR GAP
+                        horarios_fmt.append(temp[col].iloc[i].strftime("%H:%M"))
+                        ordens_fmt.append(temp[ordem_col].iloc[i])
 
-            # Maior horário
-            horarios.append(temp[col].iloc[-1])
-            ordens.append(temp[ordem_col].iloc[-1])
+                # FINAL
+                horarios_fmt.append(temp[col].iloc[-1].strftime("%H:%M"))
+                ordens_fmt.append(temp[ordem_col].iloc[-1])
 
-            mini_tabela[col] = [h.strftime("%H:%M") for h in horarios]
-            mini_tabela[col + "_ORDEM"] = ordens
+                if gap_count > max_gaps:
+                    max_gaps = gap_count
 
-        # Normaliza comprimento das listas
-        max_len = max(len(v) for v in mini_tabela.values())
+            mini_tabela[col] = horarios_fmt
+            mini_tabela[ordem_col] = ordens_fmt
+
+        # constrói índice da tabela (linhas fixas)
+        index_labels = ["INÍCIO"]
+        for g in range(1, max_gaps+1):
+            index_labels.append(f"ANTERIOR GAP{g}")
+            index_labels.append(f"POSTERIOR GAP{g}")
+        index_labels.append("FINAL")
+
+        # normaliza todas as colunas pro mesmo tamanho
+        max_len = len(index_labels)
         for k in mini_tabela:
             while len(mini_tabela[k]) < max_len:
                 mini_tabela[k].append("")
 
-        mini_df = pd.DataFrame(mini_tabela)
-        mini_df.index = range(1, len(mini_df)+1)
+        mini_df = pd.DataFrame(mini_tabela, index=index_labels)
 
-        st.subheader("📊 Mini tabela HORARIO + ORDEM (PROCV)")
+        st.subheader("📊 Mini tabela HORARIO + ORDEM (modelo fixo)")
         st.dataframe(mini_df)
