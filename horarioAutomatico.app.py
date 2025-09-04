@@ -92,41 +92,55 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     return bio.read()
 
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
-    """ 
-    Monta tabelas por dia contendo registros com HORARIO preenchido:
+    """
+    Monta mini tabelas por dia contendo apenas registros válidos:
     - HORARIO<dia> (texto hh:mm), ORDEM<dia> (Int64), OBS<dia> (vazio)
-    - Ordena por HORARIO<dia> (crescente)
-    - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } para todos os dias com dados
+    - Ordena por HORARIO<dia> (crescente), de forma independente por dia
+    - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } somente para dias com dados
     """
     tabelas = {}
     for dia in DIAS:
         hcol = f'HORARIO{dia}'
         ocol = f'ORDEM{dia}'
 
+        # Se o arquivo não tiver as colunas, pula o dia
         if hcol not in df_raw.columns and ocol not in df_raw.columns:
             continue
 
+        # Séries (sem mutar df_raw)
         ser_h = df_raw[hcol] if hcol in df_raw.columns else pd.Series([pd.NA]*len(df_raw), index=df_raw.index)
         ser_o = df_raw[ocol] if ocol in df_raw.columns else pd.Series([pd.NA]*len(df_raw), index=df_raw.index)
 
+        # Normaliza horário -> 'hh:mm' (texto); ORDEM -> numérico
         horarios = ser_h.apply(to_hhmm)
-        ordens = pd.to_numeric(ser_o, errors='coerce').astype('Int64')
+        ordens   = pd.to_numeric(ser_o, errors='coerce').astype('Int64')
 
-        # Inclui linhas com HORARIO preenchido
-        mask_com_horario = horarios.ne('')
-        if not mask_com_horario.any():
+        # Apenas válidos: horário não vazio E ordem não nula
+        mask_validos = horarios.ne('') & ordens.notna()
+        if not mask_validos.any():
             continue
 
         df_dia = pd.DataFrame({
-            f'HORARIO{dia}': horarios[mask_com_horario].values,
-            f'ORDEM{dia}'  : ordens[mask_com_horario].values,
+            f'HORARIO{dia}': horarios[mask_validos].values,
+            f'ORDEM{dia}'  : ordens[mask_validos].values,
         })
 
-        df_dia[f'OBS{dia}'] = ''
+        # Ordenação por horário (como 'HH:MM' está zero-padded, ordenação lexicográfica funciona)
         df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+
+        # OBS vazia (vai ser preenchida automaticamente em um próximo passo)
+        # Preenche OBS com 'Menor Horário' e 'Maior Horário'
+        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+        if horarios_validos:
+            menor = min(horarios_validos)
+            maior = max(horarios_validos)
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+
+        df_dia[f'OBS{dia}'] = ''
+
         tabelas[dia] = df_dia.reset_index(drop=True)
 
-    return tabelas
 # ------------------------------------------------------------
 # Processamento principal (normalização) - sem alterar df_raw
 # ------------------------------------------------------------
@@ -295,7 +309,9 @@ if uploaded_file is not None:
         st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
         tabelas_por_dia = construir_tabelas_por_dia(df_raw)
 
-        if tabelas_por_dia:
+        if not tabelas_por_dia:
+            st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
+        else:
             for dia in DIAS:
                 if dia in tabelas_por_dia:
                     st.markdown(f"**{dia}**")
