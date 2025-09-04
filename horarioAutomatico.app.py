@@ -159,9 +159,12 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
 # ------------------------------------------------------------
 def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
-    Retorna uma tabela com: Coluna, Registros válidos, Menor horário, Maior horário
-    (sem modificar df_raw; ignora células vazias/inválidas).
+    Retorna uma tabela com: Coluna, Menor horário, Maior horário
+    (ignora colunas HORARIO* que não possuam nenhum valor válido).
+    Não modifica df_raw.
     """
+    from typing import Optional
+
     def to_minutes(v) -> Optional[int]:
         if pd.isna(v):
             return None
@@ -184,22 +187,16 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     out = []
     for col in hor_cols:
         mins = [to_minutes(v) for v in df_raw[col].tolist()]
-        mins = [m for m in mins if m is not None]
+        mins = [m for m in mins if m is not None]  # só válidos
         if mins:
             mi, ma = min(mins), max(mins)
             out.append({
                 "Coluna": col,
-                "Registros válidos": len(mins),
                 "Menor horário": f"{mi//60:02d}:{mi%60:02d}",
                 "Maior horário": f"{ma//60:02d}:{ma%60:02d}",
             })
-        else:
-            out.append({
-                "Coluna": col,
-                "Registros válidos": 0,
-                "Menor horário": "—",
-                "Maior horário": "—",
-            })
+
+    # mantém somente colunas HORARIO* com pelo menos um valor válido
     return pd.DataFrame(out)
 
 # ------------------------------------------------------------
@@ -269,3 +266,4 @@ if uploaded_file is not None:
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
