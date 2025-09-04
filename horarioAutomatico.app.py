@@ -92,12 +92,17 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     return bio.read()
 
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
-    """ 
-    Monta tabelas por dia contendo registros com HORARIO preenchido:
-    - HORARIO<dia> (texto hh:mm), ORDEM<dia> (Int64), OBS<dia> (vazio)
-    - Ordena por HORARIO<dia> (crescente)
-    - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } para todos os dias com dados
-    """
+    """ ... """
+
+    def horario_para_minutos(hhmm: str) -> int:
+        """Converte 'hh:mm' para minutos desde 00:00."""
+        m = re.match(r'^(\d{2}):(\d{2})$', hhmm)
+        if m:
+            return int(m.group(1)) * 60 + int(m.group(2))
+        return -1  # inválido
+
+    for dia in DIAS:
+
     tabelas = {}
     for dia in DIAS:
         hcol = f'HORARIO{dia}'
@@ -331,3 +336,4 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
