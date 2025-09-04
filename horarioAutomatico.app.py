@@ -1,94 +1,96 @@
+# =========================
+# MINI PAINEL DE INDICADORES
+# (colar após processar o df e gerar `agenda`, `resumo`, `checagens`, `meta`)
+# =========================
+
 import streamlit as st
 import pandas as pd
-from datetime import datetime, time, timedelta
+from typing import Optional
 
-st.title("📊 Mini tabela HORARIO + PROCV para ORDEM")
+def _valor_unico_ou_multiplos(df: pd.DataFrame, col: str) -> str:
+    """Retorna o valor único da coluna (se houver), 'múltiplos' se >1, ou '—' se vazio/inexistente."""
+    if col not in df.columns:
+        return "—"
+    vals = (
+        df[col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .loc[lambda s: s.ne("")]
+        .unique()
+        .tolist()
+    )
+    if len(vals) == 0:
+        return "—"
+    if len(vals) == 1:
+        return vals[0]
+    return "múltiplos"
 
-uploaded_file = st.file_uploader("Escolha a planilha Excel", type=["xlsx"])
+def _frequencia_para_exibir(meta_df: pd.DataFrame, df_raw: pd.DataFrame) -> str:
+    """Prioriza a frequência detectada; se vazia, cai para a coluna FREQUENCIA do arquivo."""
+    freq_detectada = ""
+    try:
+        freq_detectada = meta_df.loc[meta_df['chave'] == 'frequencia_detectada', 'valor'].iloc[0]
+    except Exception:
+        pass
 
-def parse_excel_time(val):
-    if pd.isna(val):
-        return None
-    if isinstance(val, float):
-        return datetime(1899, 12, 30) + timedelta(days=val)
-    if isinstance(val, time):
-        return datetime.combine(datetime.today(), val)
-    if isinstance(val, datetime):
-        return val
-    if isinstance(val, str):
-        for fmt in ["%H:%M:%S", "%H:%M"]:
-            try:
-                return datetime.strptime(val.strip(), fmt)
-            except:
-                pass
-    return None
+    if freq_detectada and str(freq_detectada).strip():
+        return str(freq_detectada)
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    # fallback: usa o valor da coluna FREQUENCIA (se for único)
+    f_raw = _valor_unico_ou_multiplos(df_raw, 'FREQUENCIA')
+    return f_raw if f_raw != "—" else "—"
 
-    # Detecta colunas HORARIO preenchidas
-    horario_cols = [col for col in df.columns if col.upper().startswith("HORARIO")]
-    horario_cols = [col for col in horario_cols if df[col].notna().any()]
+def _nome_setor(df_raw: pd.DataFrame, uploaded_name: Optional[str] = None) -> str:
+    """Tenta obter o nome do setor pela coluna SETOR; se não houver, tenta inferir do nome do arquivo."""
+    setor = _valor_unico_ou_multiplos(df_raw, 'SETOR')
+    if setor != "—" and setor != "múltiplos":
+        return setor
+    # fallback: tenta extrair algo como 'PR18' do nome do arquivo
+    if uploaded_name:
+        import re
+        m = re.search(r'\\b([A-Z]{2}\\d{1,3})\\b', uploaded_name.upper())
+        if m:
+            return m.group(1)
+    return setor  # '—' ou 'múltiplos'
 
-    if not horario_cols:
-        st.write("❌ Nenhuma coluna HORARIO preenchida encontrada.")
-    else:
-        # Normaliza horários
-        for col in horario_cols:
-            df[col] = df[col].apply(parse_excel_time)
+# ---- Contagem de pontos
+# Por padrão, contamos cada linha válida (registro-dia) da agenda:
+pontos_por_registro_dia = int(agenda.shape[0]) if not agenda.empty else 0
 
-        mini_tabela = {}
+# Se preferir contar 1 ponto por endereço (ID), independentemente do dia:
+pontos_por_endereco = int(agenda['ID'].nunique()) if ('ID' in agenda.columns and not agenda.empty) else 0
 
-        max_gaps = 0  # para alinhar linhas entre colunas
-        for col in horario_cols:
-            ordem_col = col.replace("HORARIO", "ORDEM")
-            temp = df[[col, ordem_col]].dropna().sort_values(by=col).reset_index(drop=True)
+# Pequeno seletor (opcional) para o usuário escolher como contar:
+contagem = st.radio(
+    "Como você quer contar os pontos?",
+    options=["Registro-dia (padrão)", "Por endereço (ID único)"],
+    horizontal=True,
+    index=0
+)
+pontos = pontos_por_registro_dia if contagem == "Registro-dia (padrão)" else pontos_por_endereco
 
-            horarios_fmt = []
-            ordens_fmt = []
+# Extraímos os metadados solicitados
+setor_nome      = _nome_setor(df, getattr(uploaded, 'name', None))
+subprefeitura   = _valor_unico_ou_multiplos(df, 'SUBPREFEITURA')
+frequencia_exib = _frequencia_para_exibir(meta, df)
+turno           = _valor_unico_ou_multiplos(df, 'TURNO')
+tipo_coleta     = _valor_unico_ou_multiplos(df, 'TIPOCOLETA')
 
-            if not temp.empty:
-                # INÍCIO
-                horarios_fmt.append(temp[col].iloc[0].strftime("%H:%M"))
-                ordens_fmt.append(temp[ordem_col].iloc[0])
+# ---- Layout do mini painel
+st.markdown("### 🔎 Visão geral do setor")
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.metric("Pontos do setor", f"{pontos:,}".replace(",", "."))
+with c2:
+    st.metric("Setor", setor_nome)
+with c3:
+    st.metric("Subprefeitura", subprefeitura)
 
-                # GAPs
-                gap_count = 0
-                for i in range(1, len(temp)):
-                    diff = (temp[col].iloc[i] - temp[col].iloc[i-1]).total_seconds() / 60
-                    if diff > 10:
-                        gap_count += 1
-                        # ANTERIOR GAP
-                        horarios_fmt.append(temp[col].iloc[i-1].strftime("%H:%M"))
-                        ordens_fmt.append(temp[ordem_col].iloc[i-1])
-                        # POSTERIOR GAP
-                        horarios_fmt.append(temp[col].iloc[i].strftime("%H:%M"))
-                        ordens_fmt.append(temp[ordem_col].iloc[i])
-
-                # FINAL
-                horarios_fmt.append(temp[col].iloc[-1].strftime("%H:%M"))
-                ordens_fmt.append(temp[ordem_col].iloc[-1])
-
-                if gap_count > max_gaps:
-                    max_gaps = gap_count
-
-            mini_tabela[col] = horarios_fmt
-            mini_tabela[ordem_col] = ordens_fmt
-
-        # constrói índice da tabela (linhas fixas)
-        index_labels = ["INÍCIO"]
-        for g in range(1, max_gaps+1):
-            index_labels.append(f"ANTERIOR GAP{g}")
-            index_labels.append(f"POSTERIOR GAP{g}")
-        index_labels.append("FINAL")
-
-        # normaliza todas as colunas pro mesmo tamanho
-        max_len = len(index_labels)
-        for k in mini_tabela:
-            while len(mini_tabela[k]) < max_len:
-                mini_tabela[k].append("")
-
-        mini_df = pd.DataFrame(mini_tabela, index=index_labels)
-
-        st.subheader("📊 Mini tabela HORARIO + ORDEM (modelo fixo)")
-        st.dataframe(mini_df)
+c4, c5, c6 = st.columns(3)
+with c4:
+    st.metric("Frequência", frequencia_exib)
+with c5:
+    st.metric("Turno", turno)
+with c6:
+    st.metric("Tipo de coleta", tipo_coleta)
