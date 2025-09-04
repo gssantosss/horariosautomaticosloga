@@ -271,6 +271,8 @@ def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name
 # ------------------------------------------------------------
 # UI (enxuta): sem prévia, sem seletor de aba; inclui mini tabela de horários
 # ------------------------------------------------------------
+# === Bloco principal da UI (substitua o seu trecho por este) ===
+
 st.title("Normalizador de Roteiro por Dia (HORARIO/ORDEM)")
 st.caption("Faça upload da planilha (.xlsx) do setor. O app usa automaticamente a aba com colunas HORARIO*/ORDEM*. Interface limpa, sem prévias.")
 
@@ -283,11 +285,22 @@ if uploaded_file is not None:
         aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
         df_raw = pd.read_excel(uploaded_file, sheet_name=aba_dados)
 
-        # 2) Prévia completa por dia (somente válidos)
+        # 2) Processamento (sem alterar df_raw; sem colunas extras)
+        agenda = processar_df_sem_mutar(df_raw)
+
+        # 3) Painel principal (métricas)
+        st.markdown("---")
+        render_mini_painel(df_raw, agenda, getattr(uploaded_file, 'name', None))
+
+        # 4) Mini tabela: menor/maior horário por coluna HORARIO*
+        st.markdown("### ⏱️ Faixa de horários por coluna (HORARIO*)")
+        tabela_h = tabela_min_max_horarios(df_raw)
+        st.dataframe(tabela_h, use_container_width=True, hide_index=True)
+
+        # 5) Prévia completa por dia (somente válidos)
         st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
         tabelas_por_dia = construir_tabelas_por_dia(df_raw)
 
-        # 3) Renderização das mini tabelas
         if not tabelas_por_dia:
             st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
         else:
@@ -300,40 +313,10 @@ if uploaded_file is not None:
                         hide_index=True
                     )
 
+        # (Download removido por enquanto, conforme combinado)
+
     except Exception as e:
         st.exception(e)
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-        # Processamento (sem alterar df_raw; sem colunas extras)
-        agenda = processar_df_sem_mutar(df_raw)
-
-        # Painel principal (métricas)
-        st.markdown("---")
-        render_mini_painel(df_raw, agenda, getattr(uploaded_file, 'name', None))
-
-        # Mini tabela: menor/maior horário por coluna HORARIO*
-        st.markdown("### ⏱️ Faixa de horários por coluna (HORARIO*)")
-        tabela_h = tabela_min_max_horarios(df_raw)
-        st.dataframe(tabela_h, use_container_width=True, hide_index=True)
-
-        # Download do Excel apenas com 'agenda_por_dia'
-        # (removido por hora)
-        # out_bytes = montar_excel_somente_agenda(agenda)
-        # st.download_button(
-        #     label="⬇️ Baixar Excel (agenda_por_dia)",
-        #     data=out_bytes,
-        #     file_name="roteiro_normalizado.xlsx",
-        #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        # )
-
-    except Exception as e:
-        st.exception(e)
-        st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
-else:
-    st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-
-
-
-
-
