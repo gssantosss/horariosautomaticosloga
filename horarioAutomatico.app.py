@@ -73,10 +73,8 @@ def selecionar_aba_dados(xls: pd.ExcelFile) -> str:
     Seleciona automaticamente a aba que contenha qualquer coluna ORDEM* ou HORARIO*.
     Se não encontrar, retorna a primeira aba.
     """
-    target_cols_prefix = tuple([f'ORDEM{d}' for d in DIAS] + [f'HORARIO{d}' for d in DIAS])
     for sh in xls.sheet_names:
         try:
-            # Carrega só o cabeçalho (nrows=0 lê os nomes das colunas)
             header_df = pd.read_excel(xls, sheet_name=sh, nrows=0)
             cols_upper = [str(c).upper() for c in header_df.columns]
             if any(c.startswith("ORDEM") or c.startswith("HORARIO") for c in cols_upper):
@@ -109,8 +107,8 @@ def processar_df_sem_mutar(df: pd.DataFrame):
     ] if c in df.columns]
 
     linhas_ok = []
-
     n = len(df)
+
     for dia in DIAS:
         hcol, ocol, fcol = f'HORARIO{dia}', f'ORDEM{dia}', f'FORMACOLETA{dia}'
 
@@ -157,6 +155,54 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
     return int(mask.sum())
 
 # ------------------------------------------------------------
+# Mini tabela: menor/maior horário por coluna HORARIO*
+# ------------------------------------------------------------
+def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retorna uma tabela com: Coluna, Registros válidos, Menor horário, Maior horário
+    (sem modificar df_raw; ignora células vazias/inválidas).
+    """
+    def to_minutes(v) -> Optional[int]:
+        if pd.isna(v):
+            return None
+        s = str(v).strip()
+        if not s or s.lower() == 'nan':
+            return None
+        # tenta parse geral (aceita HH:MM:SS, datetime etc.)
+        try:
+            t = pd.to_datetime(s, errors='raise').time()
+            return t.hour*60 + t.minute
+        except Exception:
+            m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', s)
+            if m:
+                hh = int(m.group(1)); mm = int(m.group(2))
+                if 0 <= hh <= 23 and 0 <= mm <= 59:
+                    return hh*60 + mm
+        return None
+
+    hor_cols = [c for c in df_raw.columns if str(c).upper().startswith('HORARIO')]
+    out = []
+    for col in hor_cols:
+        mins = [to_minutes(v) for v in df_raw[col].tolist()]
+        mins = [m for m in mins if m is not None]
+        if mins:
+            mi, ma = min(mins), max(mins)
+            out.append({
+                "Coluna": col,
+                "Registros válidos": len(mins),
+                "Menor horário": f"{mi//60:02d}:{mi%60:02d}",
+                "Maior horário": f"{ma//60:02d}:{ma%60:02d}",
+            })
+        else:
+            out.append({
+                "Coluna": col,
+                "Registros válidos": 0,
+                "Menor horário": "—",
+                "Maior horário": "—",
+            })
+    return pd.DataFrame(out)
+
+# ------------------------------------------------------------
 # Mini painel (apenas métricas)
 # ------------------------------------------------------------
 def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name: Optional[str]):
@@ -184,7 +230,7 @@ def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name
     with c6: st.metric("Tipo de coleta", tipo_coleta if tipo_coleta != "—" else "")
 
 # ------------------------------------------------------------
-# UI (enxuta): sem prévia, sem seletor de aba
+# UI (enxuta): sem prévia, sem seletor de aba; inclui mini tabela de horários
 # ------------------------------------------------------------
 st.title("Normalizador de Roteiro por Dia (HORARIO/ORDEM)")
 st.caption("Faça upload da planilha (.xlsx) do setor. O app usa automaticamente a aba com colunas HORARIO*/ORDEM*. Interface limpa, sem prévias.")
@@ -203,6 +249,11 @@ if uploaded_file is not None:
         # Painel principal (métricas)
         st.markdown("---")
         render_mini_painel(df_raw, agenda, getattr(uploaded_file, 'name', None))
+
+        # Mini tabela: menor/maior horário por coluna HORARIO*
+        st.markdown("### ⏱️ Faixa de horários por coluna (HORARIO*)")
+        tabela_h = tabela_min_max_horarios(df_raw)
+        st.dataframe(tabela_h, use_container_width=True, hide_index=True)
 
         # Download do Excel apenas com 'agenda_por_dia'
         out_bytes = montar_excel_somente_agenda(agenda)
