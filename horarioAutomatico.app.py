@@ -127,22 +127,30 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         df_dia[f'OBS{dia}'] = ''
 
         # Preenche OBS com 'Menor Horário' e 'Maior Horário'
-        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
-        if horarios_validos:
-            menor = min(horarios_validos)
-            maior = max(horarios_validos)
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+        # Preenche OBS com 'Menor Horário' e 'Maior Horário'
+horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+if horarios_validos:
+    menor = min(horarios_validos)
+    maior = max(horarios_validos)
+    df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+    df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
 
-        # Detecta gaps maiores que 10 minutos
-        horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos)
-        gaps = horarios_minutos.diff().fillna(0)
-        gap_indices = gaps[gaps > 10].index
-        for i, idx in enumerate(gap_indices, start=1):
-            anterior_idx = idx - 1
-            if anterior_idx >= 0:
-                df_dia.at[anterior_idx, f'OBS{dia}'] += f' GAP{i}'
-                df_dia.at[idx, f'OBS{dia}'] += f' GAP{i}'
+# Função auxiliar para converter horário para minutos
+def horario_para_minutos(hhmm: str) -> int:
+    m = re.match(r'^(\d{2}):(\d{2})$', hhmm)
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    return -1
+
+# Detecta gaps maiores que 10 minutos
+horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos)
+diffs = horarios_minutos.diff().fillna(0).astype(int)
+gap_indices = diffs[diffs > 10].index
+
+for i, idx in enumerate(gap_indices, start=1):
+    if idx > 0:
+        df_dia.at[idx - 1, f'OBS{dia}'] += f' GAP{i}'
+        df_dia.at[idx, f'OBS{dia}'] += f' GAP{i}'
     
         df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
         tabelas[dia] = df_dia.reset_index(drop=True)
@@ -333,5 +341,6 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
