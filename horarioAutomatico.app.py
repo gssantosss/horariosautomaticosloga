@@ -129,14 +129,6 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
 
         # OBS vazia (vai ser preenchida automaticamente em um próximo passo)
-        # Preenche OBS com 'Menor Horário' e 'Maior Horário'
-        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
-        if horarios_validos:
-            menor = min(horarios_validos)
-            maior = max(horarios_validos)
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
-
         df_dia[f'OBS{dia}'] = ''
 
         tabelas[dia] = df_dia.reset_index(drop=True)
