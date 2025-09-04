@@ -278,11 +278,11 @@ uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)"
 
 if uploaded_file is not None:
     try:
- # Prévia completa por dia (somente válidos)
-st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
-        
-tabelas_por_dia = construir_tabelas_por_dia(df_raw)
-        
+     # Prévia completa por dia (somente válidos)
+    st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
+            
+    tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+            
 if not tabelas_por_dia:
     st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
 else:
@@ -325,6 +325,7 @@ else:
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
