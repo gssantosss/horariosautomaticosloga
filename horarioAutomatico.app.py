@@ -278,22 +278,21 @@ uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)"
 
 if uploaded_file is not None:
     try:
-        # Prévia completa por dia (somente válidos)
-        st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
+ # Prévia completa por dia (somente válidos)
+st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
         
-        tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+tabelas_por_dia = construir_tabelas_por_dia(df_raw)
         
-        if not tabelas_por_dia:
-            st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
-        else:
-            for dia in DIAS:
-                if dia in tabelas_por_dia:
-                    st.markdown(f"**{dia}**")
-                    st.dataframe(
-                        tabelas_por_dia[dia],
-                        use_container_width=True,
-                        hide_index=True
-                    )
+if not tabelas_por_dia:
+    st.warning("Nenhum par válido HORARIO/ORDEM encontrado para exibir a prévia.")
+else:
+    for dia in DIAS:
+        if dia in tabelas_por_dia:
+            st.markdown(f"**{dia}**")
+            st.dataframe(
+                tabelas_por_dia[dia],
+                use_container_width=True,
+                hide_index=True)
 
         xls = pd.ExcelFile(uploaded_file)
         aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
@@ -326,5 +325,6 @@ if uploaded_file is not None:
         st.error("Erro ao processar o arquivo. Confira se a estrutura está conforme o padrão (colunas HORARIO*/ORDEM* por dia).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
