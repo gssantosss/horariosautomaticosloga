@@ -131,6 +131,14 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         # OBS vazia (vai ser preenchida automaticamente em um próximo passo)
         df_dia[f'OBS{dia}'] = ''
 
+        # Preenche OBS com 'Menor Horário' e 'Maior Horário'
+        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+        if horarios_validos:
+            menor = min(horarios_validos)
+            maior = max(horarios_validos)
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+
         tabelas[dia] = df_dia.reset_index(drop=True)
 
 # ------------------------------------------------------------
@@ -320,3 +328,4 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
