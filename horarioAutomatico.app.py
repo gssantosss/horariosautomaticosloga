@@ -68,44 +68,39 @@ def nome_setor(df_raw: pd.DataFrame, uploaded_name: Optional[str] = None) -> str
             return m.group(1)
     return setor
 
-def frequencia_para_exibir(meta_df: Optional[pd.DataFrame], df_raw: pd.DataFrame) -> str:
-    """Prioriza a frequência detectada; se vazia, usa a coluna FREQUENCIA (se única)."""
-    if isinstance(meta_df, pd.DataFrame):
+def selecionar_aba_dados(xls: pd.ExcelFile) -> str:
+    """
+    Seleciona automaticamente a aba que contenha qualquer coluna ORDEM* ou HORARIO*.
+    Se não encontrar, retorna a primeira aba.
+    """
+    target_cols_prefix = tuple([f'ORDEM{d}' for d in DIAS] + [f'HORARIO{d}' for d in DIAS])
+    for sh in xls.sheet_names:
         try:
-            freq_detectada = meta_df.loc[meta_df['chave'] == 'frequencia_detectada', 'valor'].iloc[0]
-            if str(freq_detectada).strip():
-                return str(freq_detectada)
+            # Carrega só o cabeçalho (nrows=0 lê os nomes das colunas)
+            header_df = pd.read_excel(xls, sheet_name=sh, nrows=0)
+            cols_upper = [str(c).upper() for c in header_df.columns]
+            if any(c.startswith("ORDEM") or c.startswith("HORARIO") for c in cols_upper):
+                return sh
         except Exception:
-            pass
-    f_raw = valor_unico_ou_multiplos(df_raw, 'FREQUENCIA')
-    return f_raw if f_raw != "—" else "—"
+            continue
+    return xls.sheet_names[0]
 
-def montar_excel(agenda, resumo, checagens, meta, parciais=None) -> bytes:
-    """Monta o Excel de saída (mesmo que não exibamos as tabelas na UI)."""
+def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
+    """Monta o Excel de saída, apenas com a aba 'agenda_por_dia'."""
     bio = BytesIO()
     with pd.ExcelWriter(bio, engine='openpyxl') as xw:
         agenda.to_excel(xw, sheet_name='agenda_por_dia', index=False)
-        resumo.to_excel(xw, sheet_name='resumo_dias', index=False)
-        checagens.to_excel(xw, sheet_name='checagens', index=False)
-        meta.to_excel(xw, sheet_name='meta', index=False)
-        if parciais is not None and not parciais.empty:
-            parciais.to_excel(xw, sheet_name='parciais_ignoradas', index=False)
     bio.seek(0)
     return bio.read()
 
 # ------------------------------------------------------------
-# Processamento principal (normalização)
+# Processamento principal (normalização) - sem alterar df_raw
 # ------------------------------------------------------------
-def processar_df(
-    df: pd.DataFrame,
-    incluir_parciais_em_aba: bool = True,
-    excluir_logradouro_vazio_da_agenda: bool = False,
-):
+def processar_df_sem_mutar(df: pd.DataFrame):
     """
-    - Constrói a 'agenda' (formato longo) com linhas COMPLETAS (HORARIO + ORDEM).
-    - Mantém base de contexto: ID, SETOR, TIPOCOLETA, FREQUENCIA, TURNO, TIPO, TITULO,
-      PREPOSICAO, LOGRADOURO, INICIO, FIM, DISTRITO, SUBPREFEITURA.
-    - Retorna: agenda, resumo_dias, checagens, meta, parciais
+    Constrói a 'agenda' (formato longo) com linhas COMPLETAS (HORARIO + ORDEM),
+    sem adicionar colunas ao df original.
+    Retorna apenas a 'agenda' (para manter tudo enxuto).
     """
     base_cols = [c for c in [
         'ID','SETOR','TIPOCOLETA','FREQUENCIA','TURNO',
@@ -113,95 +108,40 @@ def processar_df(
         'INICIO','FIM','DISTRITO','SUBPREFEITURA'
     ] if c in df.columns]
 
-    linhas_ok, linhas_parciais = [], []
+    linhas_ok = []
 
+    n = len(df)
     for dia in DIAS:
         hcol, ocol, fcol = f'HORARIO{dia}', f'ORDEM{dia}', f'FORMACOLETA{dia}'
-        for c in (hcol, ocol, fcol):
-            if c not in df.columns:
-                df[c] = pd.NA
 
-        bloco = df[base_cols + [hcol, ocol, fcol]].copy()
-        bloco.rename(columns={hcol: 'HORARIO', ocol: 'ORDEM', fcol: 'FORMA_COLETA'}, inplace=True)
+        # Séries independentes (não alteram df_raw)
+        ser_h = df[hcol] if hcol in df.columns else pd.Series([pd.NA]*n, index=df.index)
+        ser_o = df[ocol] if ocol in df.columns else pd.Series([pd.NA]*n, index=df.index)
+        ser_f = df[fcol] if fcol in df.columns else pd.Series([pd.NA]*n, index=df.index)
+
+        bloco = df[base_cols].copy()
+        bloco['HORARIO'] = ser_h.apply(to_hhmm)                         # texto hh:mm
+        bloco['ORDEM'] = pd.to_numeric(ser_o, errors='coerce').astype('Int64')
+        bloco['FORMA_COLETA'] = pd.Series(ser_f, index=df.index).astype('string').str.strip().fillna('')
         bloco['DIA_SEMANA'] = dia
-
-        bloco['HORARIO'] = bloco['HORARIO'].apply(to_hhmm)     # texto hh:mm
-        bloco['ORDEM']   = pd.to_numeric(bloco['ORDEM'], errors='coerce').astype('Int64')
-        bloco['FORMA_COLETA'] = bloco['FORMA_COLETA'].astype('string').str.strip().fillna('')
 
         has_h = bloco['HORARIO'].ne('')
         has_o = bloco['ORDEM'].notna()
+        completo = has_h & has_o
 
-        bloco['STATUS'] = np.where(has_h & has_o, 'completo',
-                           np.where(has_h & ~has_o, 'so_horario',
-                           np.where(~has_h & has_o, 'so_ordem', 'vazio')))
-
-        linhas_ok.append(bloco[bloco['STATUS'] == 'completo'])
-
-        if incluir_parciais_em_aba:
-            linhas_parciais.append(bloco[bloco['STATUS'].isin(['so_horario', 'so_ordem'])])
+        if completo.any():
+            linhas_ok.append(bloco.loc[completo])
 
     agenda = pd.concat(linhas_ok, ignore_index=True) if linhas_ok else pd.DataFrame()
-    parciais = pd.concat(linhas_parciais, ignore_index=True) if (incluir_parciais_em_aba and linhas_parciais) else pd.DataFrame()
 
-    if excluir_logradouro_vazio_da_agenda and not agenda.empty and 'LOGRADOURO' in agenda.columns:
-        agenda = agenda[agenda['LOGRADOURO'].fillna('').astype(str).str.strip().ne('')].copy()
-
+    # Ordenação final
     if not agenda.empty:
         if 'DIA_SEMANA' in agenda.columns:
             agenda['DIA_SEMANA'] = agenda['DIA_SEMANA'].astype(CAT_DIAS)
         sort_cols = [c for c in ['ID', 'DIA_SEMANA', 'ORDEM'] if c in agenda.columns]
         agenda.sort_values(by=sort_cols, inplace=True, kind='stable')
 
-    # Resumo por dia (mantido apenas para o arquivo de download)
-    if not agenda.empty and 'DIA_SEMANA' in agenda.columns:
-        resumo = (agenda.groupby('DIA_SEMANA', as_index=False)
-                        .size()
-                        .rename(columns={'size':'linhas_completas'}))
-        resumo['DIA_SEMANA'] = resumo['DIA_SEMANA'].astype(CAT_DIAS)
-        faltantes = set(DIAS) - set(resumo['DIA_SEMANA'].astype(str))
-        if faltantes:
-            add = pd.DataFrame({'DIA_SEMANA': list(faltantes), 'linhas_completas':[0]*len(faltantes)})
-            add['DIA_SEMANA'] = add['DIA_SEMANA'].astype(CAT_DIAS)
-            resumo = pd.concat([resumo, add], ignore_index=True)
-        resumo.sort_values('DIA_SEMANA', inplace=True)
-    else:
-        resumo = pd.DataFrame({'DIA_SEMANA': DIAS, 'linhas_completas': [0]*len(DIAS)})
-
-    # Frequência detectada (para meta e exibição)
-    if not agenda.empty and 'DIA_SEMANA' in agenda.columns:
-        freq_detectada = '/'.join([d for d in DIAS if agenda['DIA_SEMANA'].astype(str).eq(d).any()])
-    else:
-        freq_detectada = ''
-
-    # Checagens (mantidas só para o arquivo de download)
-    checagens = []
-    for dia in DIAS:
-        if agenda.empty:
-            checagens.append({'DIA_SEMANA': dia, 'linhas': 0, 'ordem_nao_decrescente': None})
-            continue
-        sub = agenda[agenda['DIA_SEMANA'].astype(str) == dia]
-        if sub.empty:
-            checagens.append({'DIA_SEMANA': dia, 'linhas': 0, 'ordem_nao_decrescente': None})
-            continue
-        s = sub['ORDEM'].dropna().sort_values().to_numpy()
-        ok = bool(np.all(np.diff(s) >= 0)) if len(s) else None
-        checagens.append({'DIA_SEMANA': dia, 'linhas': int(sub.shape[0]), 'ordem_nao_decrescente': ok})
-    checagens_df = pd.DataFrame(checagens)
-
-    # Metadados (para arquivo de download e exibição da frequência)
-    freq_coluna = ''
-    if 'FREQUENCIA' in df.columns and not df['FREQUENCIA'].isna().all():
-        try:
-            freq_coluna = str(df['FREQUENCIA'].dropna().astype(str).str.strip().unique()[0])
-        except Exception:
-            freq_coluna = ''
-    meta = pd.DataFrame({
-        'chave': ['frequencia_coluna','frequencia_detectada'],
-        'valor': [freq_coluna, freq_detectada]
-    })
-
-    return agenda, resumo, checagens_df, meta, parciais
+    return agenda
 
 # ------------------------------------------------------------
 # Cálculo: Qtde. de Pontos (1 por linha com qualquer ORDEM* preenchida)
@@ -210,7 +150,6 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
     ordem_cols = [f'ORDEM{d}' for d in DIAS if f'ORDEM{d}' in df_raw.columns]
     if not ordem_cols:
         return 0
-    # True se qualquer ORDEM* da linha for numérica/preenchida
     mask = pd.Series(False, index=df_raw.index)
     for col in ordem_cols:
         s = pd.to_numeric(df_raw[col], errors='coerce').notna()
@@ -218,13 +157,18 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
     return int(mask.sum())
 
 # ------------------------------------------------------------
-# Mini painel (apenas métricas; sem prévias/mini tabelas)
+# Mini painel (apenas métricas)
 # ------------------------------------------------------------
-def render_mini_painel(df_raw: pd.DataFrame, meta: Optional[pd.DataFrame], uploaded_name: Optional[str]):
+def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name: Optional[str]):
     qt_pontos      = calcular_qtde_pontos(df_raw)
     setor_nome     = nome_setor(df_raw, uploaded_name)
     subprefeitura  = valor_unico_ou_multiplos(df_raw, 'SUBPREFEITURA')
-    frequencia_exb = frequencia_para_exibir(meta, df_raw)
+    # Frequência exibida: prioriza detectada pela agenda; se vazio, usa coluna FREQUENCIA (se única)
+    if not agenda.empty and 'DIA_SEMANA' in agenda.columns:
+        freq_detectada = '/'.join([d for d in DIAS if agenda['DIA_SEMANA'].astype(str).eq(d).any()])
+    else:
+        freq_detectada = ''
+    frequencia_exb = freq_detectada if freq_detectada.strip() else valor_unico_ou_multiplos(df_raw, 'FREQUENCIA')
     turno          = valor_unico_ou_multiplos(df_raw, 'TURNO')
     tipo_coleta    = valor_unico_ou_multiplos(df_raw, 'TIPOCOLETA')
 
@@ -235,44 +179,35 @@ def render_mini_painel(df_raw: pd.DataFrame, meta: Optional[pd.DataFrame], uploa
     with c3: st.metric("Subprefeitura", subprefeitura)
 
     c4, c5, c6 = st.columns(3)
-    with c4: st.metric("Frequência", frequencia_exb)
-    with c5: st.metric("Turno", turno)
-    with c6: st.metric("Tipo de coleta", tipo_coleta)
+    with c4: st.metric("Frequência", frequencia_exb if frequencia_exb != "—" else "")
+    with c5: st.metric("Turno", turno if turno != "—" else "")
+    with c6: st.metric("Tipo de coleta", tipo_coleta if tipo_coleta != "—" else "")
 
 # ------------------------------------------------------------
-# UI (enxuta)
+# UI (enxuta): sem prévia, sem seletor de aba
 # ------------------------------------------------------------
 st.title("Normalizador de Roteiro por Dia (HORARIO/ORDEM)")
-st.caption("Faça upload da planilha (.xlsx) do setor. O app detecta os dias com HORARIO+ORDEM e normaliza a agenda. Interface limpa, sem prévias.")
+st.caption("Faça upload da planilha (.xlsx) do setor. O app usa automaticamente a aba com colunas HORARIO*/ORDEM*. Interface limpa, sem prévias.")
 
 uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
     try:
         xls = pd.ExcelFile(uploaded_file)
-        abas = xls.sheet_names
-        if not abas:
-            st.error("Não foi possível ler as abas do arquivo. Verifique se o formato é .xlsx válido.")
-            st.stop()
+        aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
+        df_raw = pd.read_excel(uploaded_file, sheet_name=aba_dados)
 
-        aba_escolhida = st.selectbox("Escolha a aba com os dados", options=abas, index=0)
-        df_raw = pd.read_excel(uploaded_file, sheet_name=aba_escolhida)
-
-        # Processamento (sem mostrar prévias/mini tabelas no UI)
-        agenda, resumo, checagens, meta, parciais = processar_df(
-            df_raw,
-            incluir_parciais_em_aba=True,           # mantemos só para o arquivo de download
-            excluir_logradouro_vazio_da_agenda=False
-        )
+        # Processamento (sem alterar df_raw; sem colunas extras)
+        agenda = processar_df_sem_mutar(df_raw)
 
         # Painel principal (métricas)
         st.markdown("---")
-        render_mini_painel(df_raw, meta, getattr(uploaded_file, 'name', None))
+        render_mini_painel(df_raw, agenda, getattr(uploaded_file, 'name', None))
 
-        # Download do Excel normalizado (sem mostrar as tabelas)
-        out_bytes = montar_excel(agenda, resumo, checagens, meta, parciais)
+        # Download do Excel apenas com 'agenda_por_dia'
+        out_bytes = montar_excel_somente_agenda(agenda)
         st.download_button(
-            label="⬇️ Baixar Excel normalizado",
+            label="⬇️ Baixar Excel (agenda_por_dia)",
             data=out_bytes,
             file_name="roteiro_normalizado.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
