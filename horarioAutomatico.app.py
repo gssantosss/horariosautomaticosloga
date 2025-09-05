@@ -331,6 +331,14 @@ if uploaded_file is not None:
                         use_container_width=True,
                         hide_index=True
                     )
+                    
+                    # Tabela adicional com ORDEM de 1 até Qtde. de Pontos e HORÁRIO vazio
+                    qtde_pontos = calcular_qtde_pontos(df_raw)
+                    df_extra = pd.DataFrame({
+                        "ORDEM": list(range(1, qtde_pontos + 1)),
+                        "HORÁRIO": ["" for _ in range(qtde_pontos)]
+                    })
+                    st.dataframe(df_extra, use_container_width=True, hide_index=True)
 
         # (Download removido por enquanto, conforme combinado)
 
@@ -339,6 +347,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
