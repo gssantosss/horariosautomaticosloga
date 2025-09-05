@@ -10,7 +10,7 @@ from typing import Optional
 # Configuração da página
 # ------------------------------------------------------------
 st.set_page_config(
-    page_title="Normalizador de Roteiro (HORARIO/ORDEM)",
+    page_title="Ajuste de Horários",
     layout="wide",
 )
 
@@ -254,10 +254,10 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
                     t_max = pd.to_datetime(maior[0], format="%H:%M")
                     jornada = t_max - t_min
                     out.append({
-                        "Coluna": hcol,
+                        "Dias da Semana": hcol,
                         "Menor horário": t_min.strftime("%H:%M"),
                         "Maior horário": t_max.strftime("%H:%M"),
-                        "Jornada": f"{jornada.components.hours:02d}:{jornada.components.minutes:02d}"
+                        "Jornada Total": f"{jornada.components.hours:02d}:{jornada.components.minutes:02d}"
                     })
                 except:
                     continue
@@ -314,12 +314,12 @@ if uploaded_file is not None:
         render_mini_painel(df_raw, agenda, getattr(uploaded_file, 'name', None))
 
         # 4) Mini tabela: menor/maior horário por coluna HORARIO*
-        st.markdown("### ⏱️ Faixa de horários por coluna (HORARIO*)")
+        st.markdown("### 🕒 Informações por Dia (Datas Bases Escolhidas)")
         tabela_h = tabela_min_max_horarios(df_raw)
         st.dataframe(tabela_h, use_container_width=True, hide_index=True)
 
         # 5) Prévia completa por dia (somente válidos)
-        st.markdown("### 📋 Prévia por dia (somente horários e ordens válidos)")
+        st.markdown("### 📋 Prévia por dia")
         tabelas_por_dia = construir_tabelas_por_dia(df_raw)
 
         if tabelas_por_dia:
@@ -339,6 +339,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
