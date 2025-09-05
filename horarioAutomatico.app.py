@@ -127,38 +127,27 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
 
         df_dia[f'OBS{dia}'] = ''
         turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-    if turno in ["NOTURNO", "VESPERTINO"]:
-        def ajustar_horario(hhmm):
-            try:
-                hora = pd.to_datetime(hhmm, format="%H:%M")
-                if hora.hour < 9:
-                    hora += pd.Timedelta(days=1)
-                return hora
-            except:
-                return pd.NaT
-        df_dia["HORARIO_AJUSTADO"] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
-        df_dia.sort_values(by=["HORARIO_AJUSTADO", f'ORDEM{dia}'], inplace=True, kind='stable')
-        df_dia.drop(columns=["HORARIO_AJUSTADO"], inplace=True)
-    else:
-        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+        if turno in ['NOTURNO', 'VESPERTINO'] and f'HORARIO{dia}' in df_dia.columns:
+            def ajustar_horario(hhmm):
+                try:
+                    hora = pd.to_datetime(hhmm, format='%H:%M')
+                    if hora.hour < 9:
+                        hora += pd.Timedelta(days=1)
+                    return hora
+                except:
+                    return pd.NaT
+            df_dia['HORARIO_AJUSTADO'] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
+            df_dia.sort_values(by=['HORARIO_AJUSTADO', f'ORDEM{dia}'], inplace=True, kind='stable')
+            df_dia.drop(columns=['HORARIO_AJUSTADO'], inplace=True)
+        else:
+            df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
         df_dia.reset_index(drop=True, inplace=True)
 
         # Preenche Menor/Maior Horário
         horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
         if horarios_validos:
-            ajustados = []
-        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-        for h in horarios_validos:
-            try:
-                hora = pd.to_datetime(h, format="%H:%M")
-                if turno in ["NOTURNO", "VESPERTINO"] and hora.hour < 9:
-                    hora += pd.Timedelta(days=1)
-                ajustados.append((hora, h))
-            except:
-                continue
-        if ajustados:
-            menor = min(ajustados)[1]
-            maior = max(ajustados)[1]
+            menor = min(horarios_validos)
+            maior = max(horarios_validos)
             df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
             df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
 
@@ -268,15 +257,7 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     hor_cols = [c for c in df_raw.columns if str(c).upper().startswith('HORARIO')]
     out = []
     for col in hor_cols:
-        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-        raw_vals = df_raw[col].tolist()
-        mins = []
-        for v in raw_vals:
-            m = to_minutes(v)
-            if m is not None:
-                if turno in ["NOTURNO", "VESPERTINO"] and m < 540:
-                    m += 1440
-                mins.append(m)
+        mins = [to_minutes(v) for v in df_raw[col].tolist()]
         mins = [m for m in mins if m is not None]  # só válidos
         if mins:
             mi, ma = min(mins), max(mins)
@@ -287,14 +268,6 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
             })
 
     # mantém somente colunas HORARIO* com pelo menos um valor válido
-    for row in out:
-        try:
-            mi = int(row["Menor horário"][:2]) * 60 + int(row["Menor horário"][3:])
-            ma = int(row["Maior horário"][:2]) * 60 + int(row["Maior horário"][3:])
-            jornada = ma - mi
-            row["Jornada"] = f"{jornada//60:02d}:{jornada%60:02d}"
-        except:
-            row["Jornada"] = ""
     return pd.DataFrame(out)
 
 # ------------------------------------------------------------
@@ -374,4 +347,3 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-
