@@ -233,49 +233,50 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
 # ------------------------------------------------------------
 def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
-    Retorna uma tabela com: Coluna, Menor horário, Maior horário
-    (ignora colunas HORARIO* que não possuam nenhum valor válido).
-    Não modifica df_raw.
+    Retorna uma tabela com: Coluna, Menor horário, Maior horário, Jornada
+    Aplica lógica da virada do dia (00:00–08:59 como dia seguinte).
     """
-    from typing import Optional
+    def ajustar_horario(hhmm: str) -> pd.Timestamp:
+        try:
+            hora = pd.to_datetime(hhmm, format="%H:%M")
+            if hora.hour < 9:
+                hora += pd.Timedelta(days=1)
+            return hora
+        except:
+            return pd.NaT
 
-    def to_minutes(v) -> Optional[int]:
+    def to_hhmm(v) -> str:
         if pd.isna(v):
-            return None
+            return ""
         s = str(v).strip()
-        if not s or s.lower() == 'nan':
-            return None
-        # tenta parse geral (aceita HH:MM:SS, datetime etc.)
+        if not s or s.lower() == "nan":
+            return ""
         try:
             t = pd.to_datetime(s, errors='raise').time()
-            return t.hour*60 + t.minute
-        except Exception:
-            m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', s)
-            if m:
-                hh = int(m.group(1)); mm = int(m.group(2))
-                if 0 <= hh <= 23 and 0 <= mm <= 59:
-                    return hh*60 + mm
-        return None
+            return f"{t.hour:02d}:{t.minute:02d}"
+        except:
+            return ""
 
     hor_cols = [c for c in df_raw.columns if str(c).upper().startswith('HORARIO')]
     out = []
     for col in hor_cols:
-        mins = [to_minutes(v) for v in df_raw[col].tolist()]
-        mins = [m for m in mins if m is not None]  # só válidos
-        if mins:
-            mi, ma = min(mins), max(mins)
-            out.append({
-                "Coluna": col,
-                "Menor horário": f"{mi//60:02d}:{mi%60:02d}",
-                "Maior horário": f"{ma//60:02d}:{ma%60:02d}",
-            })
-
-    # mantém somente colunas HORARIO* com pelo menos um valor válido
+        horarios = df_raw[col].apply(to_hhmm)
+        horarios_validos = horarios.loc[lambda s: s.ne("")].tolist()
+        if horarios_validos:
+            ajustados = [ajustar_horario(h) for h in horarios_validos]
+            ajustados = [h for h in ajustados if not pd.isna(h)]
+            if ajustados:
+                menor = min(ajustados)
+                maior = max(ajustados)
+                jornada = maior - menor
+                out.append({
+                    "Coluna": col,
+                    "Menor horário": menor.strftime("%H:%M"),
+                    "Maior horário": maior.strftime("%H:%M"),
+                    "Jornada": f"{jornada.components.hours:02d}:{jornada.components.minutes:02d}"
+                })
     return pd.DataFrame(out)
 
-# ------------------------------------------------------------
-# Mini painel (apenas métricas)
-# ------------------------------------------------------------
 def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name: Optional[str]):
     qt_pontos      = calcular_qtde_pontos(df_raw)
     setor_nome     = nome_setor(df_raw, uploaded_name)
@@ -350,5 +351,3 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-
-
