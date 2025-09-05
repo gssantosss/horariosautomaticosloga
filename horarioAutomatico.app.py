@@ -294,7 +294,7 @@ def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name
 # ------------------------------------------------------------
 # === Bloco principal da UI (substitua o seu trecho por este) ===
 
-st.title("Normalizador de Roteiro por Dia (HORARIO/ORDEM)")
+st.title("Ajuste de Horários")
 st.caption("Faça upload da planilha (.xlsx) do setor. O app usa automaticamente a aba com colunas HORARIO*/ORDEM*. Interface limpa, sem prévias.")
 
 uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)", type=["xlsx"])
@@ -339,6 +339,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
