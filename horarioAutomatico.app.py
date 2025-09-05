@@ -91,7 +91,12 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     bio.seek(0)
     return bio.read()
 
-    def ajustar_horario(hhmm):
+def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
+    def horario_para_minutos(hhmm: str) -> int:
+        partes = hhmm.split(':')
+        return int(partes[0]) * 60 + int(partes[1]) if len(partes) == 2 else -1
+
+    def ajustar_horario(hhmm: str) -> pd.Timestamp:
         try:
             hora = pd.to_datetime(hhmm, format="%H:%M")
             if hora.hour < 9:
@@ -100,18 +105,10 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
         except:
             return pd.NaT
 
-def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
-    """
-    Monta tabelas por dia contendo registros com HORARIO preenchido:
-    - HORARIO<dia> (texto hh:mm), ORDEM<dia> (Int64), OBS<dia> (vazio)
-    - Ordena por HORARIO<dia> (crescente)
-    - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } para todos os dias com dados
-    """
-    def horario_para_minutos(hhmm: str) -> int:
-        partes = hhmm.split(':')
-        return int(partes[0]) * 60 + int(partes[1]) if len(partes) == 2 else -1
-
     tabelas = {}
+    turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
+    aplicar_virada = turno in ["NOTURNO", "VESPERTINO"]
+
     for dia in DIAS:
         hcol = f'HORARIO{dia}'
         ocol = f'ORDEM{dia}'
@@ -130,47 +127,45 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
             continue
 
         df_dia = pd.DataFrame({
-            f'HORARIO{dia}': horarios[mask_com_horario].values,
-            f'ORDEM{dia}'  : ordens[mask_com_horario].values,
+            hcol: horarios[mask_com_horario].values,
+            ocol: ordens[mask_com_horario].values,
         })
-
         df_dia[f'OBS{dia}'] = ''
-        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-        if turno in ['NOTURNO', 'VESPERTINO']:
-            df_dia['HORARIO_AJUSTADO'] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
-            df_dia.sort_values(by=['HORARIO_AJUSTADO', f'ORDEM{dia}'], inplace=True, kind='stable')
-            df_dia.drop(columns=['HORARIO_AJUSTADO'], inplace=True)
+
+        if aplicar_virada:
+            df_dia["HORARIO_AJUSTADO"] = df_dia[hcol].apply(ajustar_horario)
+            df_dia.sort_values(by=["HORARIO_AJUSTADO", ocol], inplace=True, kind='stable')
+            df_dia.drop(columns=["HORARIO_AJUSTADO"], inplace=True)
         else:
-            df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+            df_dia.sort_values(by=[hcol, ocol], inplace=True, kind='stable')
+
         df_dia.reset_index(drop=True, inplace=True)
 
-        # Preenche Menor/Maior Horário
-        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+        horarios_validos = df_dia[hcol].loc[lambda s: s.ne('')].tolist()
         if horarios_validos:
-                    if turno in ['NOTURNO', 'VESPERTINO']:
-            horarios_ajustados = [ajustar_horario(h) for h in horarios_validos]
-            menor_aj = min(horarios_ajustados)
-            maior_aj = max(horarios_ajustados)
-            menor = horarios_validos[horarios_ajustados.index(menor_aj)]
-            maior = horarios_validos[horarios_ajustados.index(maior_aj)]
-        else:
-            menor = min(horarios_validos)
-            maior = max(horarios_validos)
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
-            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+            if aplicar_virada:
+                horarios_ajustados = [ajustar_horario(h) for h in horarios_validos]
+                menor_idx = horarios_ajustados.index(min(horarios_ajustados))
+                maior_idx = horarios_ajustados.index(max(horarios_ajustados))
+                menor = horarios_validos[menor_idx]
+                maior = horarios_validos[maior_idx]
+            else:
+                menor = min(horarios_validos)
+                maior = max(horarios_validos)
 
-        # Detecta gaps maiores que 10 minutos
-        horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos).tolist()
+            df_dia.loc[df_dia[hcol] == menor, f'OBS{dia}'] = 'Menor Horário'
+            df_dia.loc[df_dia[hcol] == maior, f'OBS{dia}'] = 'Maior Horário'
+
+        horarios_minutos = df_dia[hcol].apply(horario_para_minutos).tolist()
         for i in range(1, len(horarios_minutos)):
             diff = horarios_minutos[i] - horarios_minutos[i-1]
             if diff > 10:
-                df_dia.at[i-1, f'OBS{dia}'] += f' GAP{i}'
-                df_dia.at[i, f'OBS{dia}'] += f' GAP{i}'
+                df_dia.at[i-1, f'OBS{dia}'] += ' GAP'
+                df_dia.at[i, f'OBS{dia}'] += ' GAP'
 
         tabelas[dia] = df_dia
 
-    return tabelas
-# ------------------------------------------------------------
+    return tabelas# ------------------------------------------------------------
 # Processamento principal (normalização) - sem alterar df_raw
 # ------------------------------------------------------------
 def processar_df_sem_mutar(df: pd.DataFrame):
@@ -355,3 +350,5 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
+
