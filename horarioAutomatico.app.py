@@ -129,28 +129,31 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
         df_dia.reset_index(drop=True, inplace=True)
 
-    # Preenche Menor/Maior Horário com lógica especial para NOTURNO/VESPERTINO
-    turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-    def ajustar_horario_obs(hhmm):
-        try:
-            hora = pd.to_datetime(hhmm, format="%H:%M")
-            if hora.hour < 9:
-                hora += pd.Timedelta(days=1)
-            return hora
-        except:
-            return pd.NaT
-    horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
-    if horarios_validos:
-        if turno in ["NOTURNO", "VESPERTINO"]:
-            ajustados = [(h, ajustar_horario_obs(h)) for h in horarios_validos]
-            ordenados = sorted(ajustados, key=lambda x: x[1])
-            menor = ordenados[0][0]
-            maior = ordenados[-1][0]
-        else:
-            menor = min(horarios_validos)
-            maior = max(horarios_validos)
-        df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
-        df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+                # Preenche Menor/Maior Horário
+                if f'HORARIO{dia}' in df_dia.columns:
+                    horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+                    if horarios_validos:
+                        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
+                        if turno in ['NOTURNO', 'VESPERTINO']:
+                            def ajustar(h):
+                                try:
+                                    hora = pd.to_datetime(h, format='%H:%M')
+                                    if hora.hour < 9:
+                                        hora += pd.Timedelta(days=1)
+                                    return hora
+                                except:
+                                    return pd.NaT
+                            horarios_ajustados = [ajustar(h) for h in horarios_validos]
+                            menor_idx = horarios_ajustados.index(min(horarios_ajustados))
+                            maior_idx = horarios_ajustados.index(max(horarios_ajustados))
+                            menor = horarios_validos[menor_idx]
+                            maior = horarios_validos[maior_idx]
+                        else:
+                            menor = min(horarios_validos)
+                            maior = max(horarios_validos)
+                        df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+                        df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
 
         # Detecta gaps maiores que 10 minutos
         horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos).tolist()
