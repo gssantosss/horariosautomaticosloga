@@ -59,7 +59,7 @@ def valor_unico_ou_multiplos(df: pd.DataFrame, col: str) -> str:
 
 def nome_setor(df_raw: pd.DataFrame, uploaded_name: Optional[str] = None) -> str:
     """Obtém o nome do setor pela coluna SETOR, ou tenta extrair algo tipo 'PR18' do nome do arquivo."""
-    setor = valor_unico_ou_multiplos(df_raw, 'SETOR')
+    setor = df_raw['SETOR'].mode().iat[0] if 'SETOR' in df_raw.columns and not df_raw['SETOR'].dropna().empty else '—'
     if setor not in ("—", "múltiplos"):
         return setor
     if uploaded_name:
@@ -126,44 +126,17 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         })
 
         df_dia[f'OBS{dia}'] = ''
+        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+        df_dia.reset_index(drop=True, inplace=True)
 
-        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-        if turno in ["NOTURNO", "VESPERTINO"]:
-            def ajustar_horario(hhmm):
-                try:
-                    hora = pd.to_datetime(hhmm, format="%H:%M")
-                    if hora.hour < 9:
-                        hora += pd.Timedelta(days=1)
-                    return hora
-                except:
-                    return pd.NaT
+        # Preenche Menor/Maior Horário
+        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+        if horarios_validos:
+            menor = min(horarios_validos)
+            maior = max(horarios_validos)
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
 
-            df_dia["HORARIO_AJUSTADO"] = df_dia[f"HORARIO{dia}"].apply(ajustar_horario)
-            df_dia.sort_values(by=["HORARIO_AJUSTADO", f"ORDEM{dia}"], inplace=True, kind="stable")
-            df_dia.reset_index(drop=True, inplace=True)
-
-            # Marca menor e maior horário com base na lógica ajustada
-            horarios_ajustados = df_dia["HORARIO_AJUSTADO"].dropna().tolist()
-            if horarios_ajustados:
-                menor = min(horarios_ajustados)
-                maior = max(horarios_ajustados)
-                menor_original = df_dia.loc[df_dia["HORARIO_AJUSTADO"] == menor, f"HORARIO{dia}"].values[0]
-                maior_original = df_dia.loc[df_dia["HORARIO_AJUSTADO"] == maior, f"HORARIO{dia}"].values[0]
-                df_dia.loc[df_dia[f"HORARIO{dia}"] == menor_original, f"OBS{dia}"] = "Menor Horário"
-                df_dia.loc[df_dia[f"HORARIO{dia}"] == maior_original, f"OBS{dia}"] = "Maior Horário"
-
-            df_dia.drop(columns=["HORARIO_AJUSTADO"], inplace=True)
-        else:
-            df_dia.sort_values(by=[f"HORARIO{dia}", f"ORDEM{dia}"], inplace=True, kind="stable")
-            df_dia.reset_index(drop=True, inplace=True)
-
-            # Marca menor e maior horário normalmente
-            horarios_validos = df_dia[f"HORARIO{dia}"].loc[lambda s: s.ne("")].tolist()
-            if horarios_validos:
-                menor = min(horarios_validos)
-                maior = max(horarios_validos)
-                df_dia.loc[df_dia[f"HORARIO{dia}"] == menor, f"OBS{dia}"] = "Menor Horário"
-                df_dia.loc[df_dia[f"HORARIO{dia}"] == maior, f"OBS{dia}"] = "Maior Horário"
         # Detecta gaps maiores que 10 minutos
         horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos).tolist()
         for i in range(1, len(horarios_minutos)):
@@ -242,45 +215,43 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
 # Mini tabela: menor/maior horário por coluna HORARIO*
 # ------------------------------------------------------------
 def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """
-    Retorna uma tabela com: Coluna, Menor horário, Maior horário
-    (ignora colunas HORARIO* que não possuam nenhum valor válido).
-    Não modifica df_raw.
-    """
     from typing import Optional
 
     def to_minutes(v) -> Optional[int]:
-        if pd.isna(v):
-            return None
+        if pd.isna(v): return None
         s = str(v).strip()
-        if not s or s.lower() == 'nan':
-            return None
-        # tenta parse geral (aceita HH:MM:SS, datetime etc.)
+        if not s or s.lower() == 'nan': return None
         try:
             t = pd.to_datetime(s, errors='raise').time()
-            return t.hour*60 + t.minute
+            mins = t.hour * 60 + t.minute
         except Exception:
             m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', s)
             if m:
                 hh = int(m.group(1)); mm = int(m.group(2))
                 if 0 <= hh <= 23 and 0 <= mm <= 59:
-                    return hh*60 + mm
-        return None
+                    mins = hh * 60 + mm
+                else:
+                    return None
+            else:
+                return None
+        if 0 <= mins < 540:  # entre 00:00 e 08:59
+            mins += 1440
+        return mins
 
     hor_cols = [c for c in df_raw.columns if str(c).upper().startswith('HORARIO')]
     out = []
     for col in hor_cols:
         mins = [to_minutes(v) for v in df_raw[col].tolist()]
-        mins = [m for m in mins if m is not None]  # só válidos
+        mins = [m for m in mins if m is not None]
         if mins:
             mi, ma = min(mins), max(mins)
+            jornada = ma - mi
             out.append({
                 "Coluna": col,
-                "Menor horário": f"{mi//60:02d}:{mi%60:02d}",
-                "Maior horário": f"{ma//60:02d}:{ma%60:02d}",
+                "Menor horário": f"{(mi%1440)//60:02d}:{(mi%1440)%60:02d}",
+                "Maior horário": f"{(ma%1440)//60:02d}:{(ma%1440)%60:02d}",
+                "Jornada": f"{jornada//60:02d}:{jornada%60:02d}"
             })
-
-    # mantém somente colunas HORARIO* com pelo menos um valor válido
     return pd.DataFrame(out)
 
 # ------------------------------------------------------------
@@ -289,14 +260,14 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
 def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name: Optional[str]):
     qt_pontos      = calcular_qtde_pontos(df_raw)
     setor_nome     = nome_setor(df_raw, uploaded_name)
-    subprefeitura  = valor_unico_ou_multiplos(df_raw, 'SUBPREFEITURA')
+    subprefeitura  = df_raw['SUBPREFEITURA'].mode().iat[0] if 'SUBPREFEITURA' in df_raw.columns and not df_raw['SUBPREFEITURA'].dropna().empty else '—'
     # Frequência exibida: prioriza detectada pela agenda; se vazio, usa coluna FREQUENCIA (se única)
     if not agenda.empty and 'DIA_SEMANA' in agenda.columns:
         freq_detectada = '/'.join([d for d in DIAS if agenda['DIA_SEMANA'].astype(str).eq(d).any()])
     else:
         freq_detectada = ''
-    frequencia_exb = freq_detectada if freq_detectada.strip() else valor_unico_ou_multiplos(df_raw, 'FREQUENCIA')
-    turno          = valor_unico_ou_multiplos(df_raw, 'TURNO')
+    frequencia_exb = freq_detectada if freq_detectada.strip() else df_raw['FREQUENCIA'].mode().iat[0] if 'FREQUENCIA' in df_raw.columns and not df_raw['FREQUENCIA'].dropna().empty else '—'
+    turno          = df_raw['TURNO'].mode().iat[0] if 'TURNO' in df_raw.columns and not df_raw['TURNO'].dropna().empty else '—'
     tipo_coleta    = valor_unico_ou_multiplos(df_raw, 'TIPOCOLETA')
 
     st.markdown("### 🔎 Visão geral do setor")
