@@ -91,6 +91,15 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     bio.seek(0)
     return bio.read()
 
+    def ajustar_horario(hhmm):
+        try:
+            hora = pd.to_datetime(hhmm, format="%H:%M")
+            if hora.hour < 9:
+                hora += pd.Timedelta(days=1)
+            return hora
+        except:
+            return pd.NaT
+
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
     """
     Monta tabelas por dia contendo registros com HORARIO preenchido:
@@ -126,12 +135,25 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         })
 
         df_dia[f'OBS{dia}'] = ''
-        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
+        if turno in ['NOTURNO', 'VESPERTINO']:
+            df_dia['HORARIO_AJUSTADO'] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
+            df_dia.sort_values(by=['HORARIO_AJUSTADO', f'ORDEM{dia}'], inplace=True, kind='stable')
+            df_dia.drop(columns=['HORARIO_AJUSTADO'], inplace=True)
+        else:
+            df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
         df_dia.reset_index(drop=True, inplace=True)
 
         # Preenche Menor/Maior Horário
         horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
         if horarios_validos:
+                    if turno in ['NOTURNO', 'VESPERTINO']:
+            horarios_ajustados = [ajustar_horario(h) for h in horarios_validos]
+            menor_aj = min(horarios_ajustados)
+            maior_aj = max(horarios_ajustados)
+            menor = horarios_validos[horarios_ajustados.index(menor_aj)]
+            maior = horarios_validos[horarios_ajustados.index(maior_aj)]
+        else:
             menor = min(horarios_validos)
             maior = max(horarios_validos)
             df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
@@ -142,8 +164,8 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         for i in range(1, len(horarios_minutos)):
             diff = horarios_minutos[i] - horarios_minutos[i-1]
             if diff > 10:
-                df_dia.at[i-1, f'OBS{dia}'] += ' GAP'
-        df_dia.at[i, f'OBS{dia}'] += ' GAP'
+                df_dia.at[i-1, f'OBS{dia}'] += f' GAP{i}'
+                df_dia.at[i, f'OBS{dia}'] += f' GAP{i}'
 
         tabelas[dia] = df_dia
 
@@ -215,50 +237,45 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
 # Mini tabela: menor/maior horário por coluna HORARIO*
 # ------------------------------------------------------------
 def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retorna uma tabela com: Coluna, Menor horário, Maior horário
+    (ignora colunas HORARIO* que não possuam nenhum valor válido).
+    Não modifica df_raw.
+    """
     from typing import Optional
 
     def to_minutes(v) -> Optional[int]:
-        if pd.isna(v): return None
+        if pd.isna(v):
+            return None
         s = str(v).strip()
-        if not s or s.lower() == 'nan': return None
+        if not s or s.lower() == 'nan':
+            return None
+        # tenta parse geral (aceita HH:MM:SS, datetime etc.)
         try:
             t = pd.to_datetime(s, errors='raise').time()
-            mins = t.hour*60 + t.minute
-            if 0 <= t.hour < 9:
-                mins += 1440
-            return mins
+            return t.hour*60 + t.minute
         except Exception:
             m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', s)
             if m:
                 hh = int(m.group(1)); mm = int(m.group(2))
                 if 0 <= hh <= 23 and 0 <= mm <= 59:
-                    mins = hh*60 + mm
-                    if hh < 9:
-                        mins += 1440
-                    return mins
+                    return hh*60 + mm
         return None
-
-    turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-    aplicar_logica = turno in ['NOTURNO', 'VESPERTINO']
 
     hor_cols = [c for c in df_raw.columns if str(c).upper().startswith('HORARIO')]
     out = []
     for col in hor_cols:
-        if aplicar_logica:
-            mins = [to_minutes(v) for v in df_raw[col].tolist()]
-        else:
-            mins = [pd.to_datetime(str(v), errors='coerce').time() if pd.notna(v) else None for v in df_raw[col].tolist()]
-            mins = [t.hour*60 + t.minute for t in mins if t is not None]
-        mins = [m for m in mins if m is not None]
+        mins = [to_minutes(v) for v in df_raw[col].tolist()]
+        mins = [m for m in mins if m is not None]  # só válidos
         if mins:
             mi, ma = min(mins), max(mins)
-            jornada = ma - mi
             out.append({
                 "Coluna": col,
-                "Menor horário": f"{mi//60%24:02d}:{mi%60:02d}",
-                "Maior horário": f"{ma//60%24:02d}:{ma%60:02d}",
-                "Jornada": f"{jornada//60}h {jornada%60}min"
+                "Menor horário": f"{mi//60:02d}:{mi%60:02d}",
+                "Maior horário": f"{ma//60:02d}:{ma%60:02d}",
             })
+
+    # mantém somente colunas HORARIO* com pelo menos um valor válido
     return pd.DataFrame(out)
 
 # ------------------------------------------------------------
