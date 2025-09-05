@@ -234,24 +234,27 @@ def calcular_qtde_pontos(df_raw: pd.DataFrame) -> int:
 def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Retorna uma tabela com: Coluna, Menor horário, Maior horário, Jornada
-    Os horários são copiados diretamente da Prévia por dia (construída pela função construir_tabelas_por_dia).
+    Busca os horários diretamente das colunas HORARIOXXX correspondentes às linhas onde OBSXXX contém 'Menor Horário' ou 'Maior Horário'.
     """
-    import pandas as pd
     tabelas_por_dia = construir_tabelas_por_dia(df_raw)
     out = []
 
     for dia in DIAS:
-        col = f"HORARIO{dia}"
-        if dia in tabelas_por_dia and col in df_raw.columns:
+        hcol = f"HORARIO{dia}"
+        obs_col = f"OBS{dia}"
+
+        if dia in tabelas_por_dia and hcol in df_raw.columns:
             df_dia = tabelas_por_dia[dia]
-            horarios = df_dia[col].loc[lambda s: s.ne("")].tolist()
-            if horarios:
+            menor = df_dia.loc[df_dia[obs_col].str.contains("Menor Horário", na=False), hcol].tolist()
+            maior = df_dia.loc[df_dia[obs_col].str.contains("Maior Horário", na=False), hcol].tolist()
+
+            if menor and maior:
                 try:
-                    t_min = pd.to_datetime(min(horarios), format="%H:%M")
-                    t_max = pd.to_datetime(max(horarios), format="%H:%M")
+                    t_min = pd.to_datetime(menor[0], format="%H:%M")
+                    t_max = pd.to_datetime(maior[0], format="%H:%M")
                     jornada = t_max - t_min
                     out.append({
-                        "Coluna": col,
+                        "Coluna": hcol,
                         "Menor horário": t_min.strftime("%H:%M"),
                         "Maior horário": t_max.strftime("%H:%M"),
                         "Jornada": f"{jornada.components.hours:02d}:{jornada.components.minutes:02d}"
@@ -260,6 +263,7 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
                     continue
 
     return pd.DataFrame(out)
+
 
 def render_mini_painel(df_raw: pd.DataFrame, agenda: pd.DataFrame, uploaded_name: Optional[str]):
     qt_pontos      = calcular_qtde_pontos(df_raw)
@@ -335,5 +339,6 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
