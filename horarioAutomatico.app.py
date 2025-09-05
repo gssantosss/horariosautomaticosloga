@@ -126,21 +126,25 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         })
 
         df_dia[f'OBS{dia}'] = ''
-    turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-    if turno in ["NOTURNO", "VESPERTINO"]:
-        def ajustar_horario(hhmm):
-            try:
-                hora = pd.to_datetime(hhmm, format="%H:%M")
-                if hora.hour < 9:
-                    hora += pd.Timedelta(days=1)
-                return hora
-            except:
-                return pd.NaT
-        df_dia['HORARIO_AJUSTADO'] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
-        df_dia.sort_values(by=['HORARIO_AJUSTADO', f'ORDEM{dia}'], inplace=True, kind='stable')
-        df_dia.drop(columns=['HORARIO_AJUSTADO'], inplace=True)
-    else:
-        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+
+        # Ordenação especial para NOTURNO ou VESPERTINO
+        turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
+        if hcol in df_dia.columns and ocol in df_dia.columns:
+            if turno in ["NOTURNO", "VESPERTINO"]:
+                def ajustar_horario(hhmm):
+                    try:
+                        hora = pd.to_datetime(hhmm, format="%H:%M")
+                        if hora.hour < 9:
+                            hora += pd.Timedelta(days=1)
+                        return hora
+                    except:
+                        return pd.NaT
+
+                df_dia["HORARIO_AJUSTADO"] = df_dia[hcol].apply(ajustar_horario)
+                df_dia.sort_values(by=["HORARIO_AJUSTADO", ocol], inplace=True, kind='stable')
+                df_dia.drop(columns=["HORARIO_AJUSTADO"], inplace=True)
+            else:
+                df_dia.sort_values(by=[hcol, ocol], inplace=True, kind='stable')
         df_dia.reset_index(drop=True, inplace=True)
 
         # Preenche Menor/Maior Horário
@@ -347,3 +351,4 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
