@@ -92,12 +92,16 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     return bio.read()
 
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
-    """ 
+    """
     Monta tabelas por dia contendo registros com HORARIO preenchido:
     - HORARIO<dia> (texto hh:mm), ORDEM<dia> (Int64), OBS<dia> (vazio)
     - Ordena por HORARIO<dia> (crescente)
     - Retorna um dicionário { 'SEG': df_seg, 'TER': df_ter, ... } para todos os dias com dados
     """
+    def horario_para_minutos(hhmm: str) -> int:
+        partes = hhmm.split(':')
+        return int(partes[0]) * 60 + int(partes[1]) if len(partes) == 2 else -1
+
     tabelas = {}
     for dia in DIAS:
         hcol = f'HORARIO{dia}'
@@ -112,7 +116,6 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         horarios = ser_h.apply(to_hhmm)
         ordens = pd.to_numeric(ser_o, errors='coerce').astype('Int64')
 
-        # Inclui linhas com HORARIO preenchido
         mask_com_horario = horarios.ne('')
         if not mask_com_horario.any():
             continue
@@ -123,6 +126,29 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
         })
 
         df_dia[f'OBS{dia}'] = ''
+        df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
+        df_dia.reset_index(drop=True, inplace=True)
+
+        # Preenche Menor/Maior Horário
+        horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
+        if horarios_validos:
+            menor = min(horarios_validos)
+            maior = max(horarios_validos)
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == menor, f'OBS{dia}'] = 'Menor Horário'
+            df_dia.loc[df_dia[f'HORARIO{dia}'] == maior, f'OBS{dia}'] = 'Maior Horário'
+
+        # Detecta gaps maiores que 10 minutos
+        horarios_minutos = df_dia[f'HORARIO{dia}'].apply(horario_para_minutos).tolist()
+        for i in range(1, len(horarios_minutos)):
+            diff = horarios_minutos[i] - horarios_minutos[i-1]
+            if diff > 10:
+                df_dia.at[i-1, f'OBS{dia}'] += f' GAP{i}'
+                df_dia.at[i, f'OBS{dia}'] += f' GAP{i}'
+
+        tabelas[dia] = df_dia
+
+    return tabelas
+
         
         # Preenche OBS com 'Menor Horário' e 'Maior Horário'
         horarios_validos = df_dia[f'HORARIO{dia}'].loc[lambda s: s.ne('')].tolist()
@@ -332,3 +358,4 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
