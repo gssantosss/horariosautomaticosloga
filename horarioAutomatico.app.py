@@ -127,7 +127,7 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
 
         df_dia[f'OBS{dia}'] = ''
     turno = valor_unico_ou_multiplos(df_raw, 'TURNO')
-    if turno in ["NOTURNO", "VESPERTINO"] and f'HORARIO{dia}' in df_dia.columns:
+    if turno in ["NOTURNO", "VESPERTINO"]:
         def ajustar_horario(hhmm):
             try:
                 hora = pd.to_datetime(hhmm, format="%H:%M")
@@ -136,13 +136,11 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
                 return hora
             except:
                 return pd.NaT
-
-        df_dia["HORARIO_AJUSTADO"] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
-        df_dia.sort_values(by=["HORARIO_AJUSTADO", f'ORDEM{dia}'], inplace=True, kind='stable')
-        df_dia.drop(columns=["HORARIO_AJUSTADO"], inplace=True)
-    elif f'HORARIO{dia}' in df_dia.columns and f'ORDEM{dia}' in df_dia.columns:
+        df_dia['HORARIO_AJUSTADO'] = df_dia[f'HORARIO{dia}'].apply(ajustar_horario)
+        df_dia.sort_values(by=['HORARIO_AJUSTADO', f'ORDEM{dia}'], inplace=True, kind='stable')
+        df_dia.drop(columns=['HORARIO_AJUSTADO'], inplace=True)
+    else:
         df_dia.sort_values(by=[f'HORARIO{dia}', f'ORDEM{dia}'], inplace=True, kind='stable')
-
         df_dia.reset_index(drop=True, inplace=True)
 
         # Preenche Menor/Maior Horário
