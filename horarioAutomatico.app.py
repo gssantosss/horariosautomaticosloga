@@ -352,7 +352,17 @@ if uploaded_file is not None:
                         df_pepa.at[0, "HORÁRIO"] = menor[0]
                     if maior:
                         df_pepa.at[qtde_pontos - 1, "HORÁRIO"] = maior[0]
-                    
+
+                    # Preencher horários dos GAPs na PE.PA.
+                    gaps = df_dia[df_dia[obs_col].str.contains("GAP", na=False)]
+                    for _, row in gaps.iterrows():
+                        ordem_gap = row[ordem_col]
+                        horario_gap = row[hor_col]
+                        if pd.notna(ordem_gap) and pd.notna(horario_gap):
+                            idx = int(ordem_gap) - 1
+                            if 0 <= idx < len(df_pepa):
+                                df_pepa.at[idx, "HORÁRIO"] = horario_gap
+
                     st.markdown("#### 🗂️ PE.PA.")
                     st.dataframe(df_pepa, use_container_width=True, hide_index=True)
 
@@ -369,6 +379,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
