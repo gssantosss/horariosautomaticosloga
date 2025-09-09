@@ -352,9 +352,6 @@ if uploaded_file is not None:
                         df_pepa.at[0, "HORÁRIO"] = menor[0]
                     if maior:
                         df_pepa.at[qtde_pontos - 1, "HORÁRIO"] = maior[0]
-                    
-                    st.markdown("#### 🗂️ PE.PA.")
-                    st.dataframe(df_pepa, use_container_width=True, hide_index=True)
 
                     
                     # Tabela adicional com ORDEM de 1 até Qtde. de Pontos e HORÁRIO vazio
@@ -371,6 +368,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
