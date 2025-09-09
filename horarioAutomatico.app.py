@@ -409,9 +409,10 @@ if uploaded_file is not None:
 
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-        st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
+    st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
