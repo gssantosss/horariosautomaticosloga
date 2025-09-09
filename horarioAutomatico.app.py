@@ -332,6 +332,31 @@ if uploaded_file is not None:
                         hide_index=True
                     )
                     
+                    # Tabela PE.PA. com ORDEM de 1 até Qtde. de Pontos e HORÁRIO preenchido nas extremidades
+                    qtde_pontos = calcular_qtde_pontos(df_raw)
+                    obs_col = f"OBS{dia}"
+                    hor_col = f"HORARIO{dia}"
+                    df_dia = tabelas_por_dia[dia]
+                    
+                    # Busca os horários marcados como Menor e Maior Horário
+                    menor = df_dia.loc[df_dia[obs_col].str.contains("Menor Horário", na=False), hor_col].tolist()
+                    maior = df_dia.loc[df_dia[obs_col].str.contains("Maior Horário", na=False), hor_col].tolist()
+                    
+                    # Cria a tabela PE.PA.
+                    df_pepa = pd.DataFrame({
+                        "ORDEM": list(range(1, qtde_pontos + 1)),
+                        "HORÁRIO": ["" for _ in range(qtde_pontos)]
+                    })
+
+                    if menor:
+                        df_pepa.at[0, "HORÁRIO"] = menor[0]
+                    if maior:
+                        df_pepa.at[qtde_pontos - 1, "HORÁRIO"] = maior[0]
+                    
+                    st.markdown("#### 🗂️ PE.PA.")
+                    st.dataframe(df_pepa, use_container_width=True, hide_index=True)
+
+                    
                     # Tabela adicional com ORDEM de 1 até Qtde. de Pontos e HORÁRIO vazio
                     qtde_pontos = calcular_qtde_pontos(df_raw)
                     df_extra = pd.DataFrame({
@@ -346,6 +371,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
