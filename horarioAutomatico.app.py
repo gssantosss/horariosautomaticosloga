@@ -90,6 +90,27 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
         agenda.to_excel(xw, sheet_name='agenda_por_dia', index=False)
     bio.seek(0)
     return bio.read()
+    
+st.markdown("### 🕳️ Gaps manuais por dia")
+horarios_gap_por_dia = {}
+
+for dia in DIAS:
+    with st.expander(f"Definir gaps para {dia}"):
+        horarios_gap = []
+        num_gaps = st.number_input(f"Número de gaps para {dia}", min_value=0, max_value=10, value=0, key=f"num_{dia}")
+        for i in range(num_gaps):
+            col1, col2 = st.columns(2)
+            antes = col1.text_input(f"Horário antes do gap {i+1}", key=f"{dia}_antes_{i}")
+            depois = col2.text_input(f"Horário depois do gap {i+1}", key=f"{dia}_depois_{i}")
+            if antes and depois:
+                horarios_gap.append((antes.strip(), depois.strip()))
+        if horarios_gap:
+            horarios_gap_por_dia[dia] = horarios_gap
+
+# Armazena no session_state para uso na função
+st.session_state["horarios_gap_por_dia"] = horarios_gap_por_dia
+
+
 
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
     def horario_para_minutos(hhmm: str) -> int:
@@ -156,12 +177,17 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
             df_dia.loc[df_dia[hcol] == menor, f'OBS{dia}'] = 'Menor Horário'
             df_dia.loc[df_dia[hcol] == maior, f'OBS{dia}'] = 'Maior Horário'
 
-        horarios_minutos = df_dia[hcol].apply(horario_para_minutos).tolist()
-        for i in range(1, len(horarios_minutos)):
-            diff = horarios_minutos[i] - horarios_minutos[i-1]
-            if diff > 10:
-                df_dia.at[i-1, f'OBS{dia}'] += ' GAP'
-                df_dia.at[i, f'OBS{dia}'] += ' GAP'
+        
+        # Lógica manual de gaps
+        horarios_gap_por_dia = st.session_state.get("horarios_gap_por_dia", {})
+        if dia in horarios_gap_por_dia:
+            lista_gaps = horarios_gap_por_dia[dia]
+            for idx, linha in df_dia.iterrows():
+                horario = linha[hcol]
+                for antes, depois in lista_gaps:
+                    if horario == antes or horario == depois:
+                        df_dia.at[idx, f'OBS{dia}'] += ' GAP'
+
 
         tabelas[dia] = df_dia
 
@@ -385,4 +411,5 @@ else:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
