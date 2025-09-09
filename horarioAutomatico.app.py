@@ -353,6 +353,8 @@ if uploaded_file is not None:
                     if maior:
                         df_pepa.at[qtde_pontos - 1, "HORÁRIO"] = maior[0]
 
+                    st.markdown("#### 🗂️ PE.PA.")
+                    st.dataframe(df_extra, use_container_width=True, hide_index=True)
                     
                     # Tabela adicional com ORDEM de 1 até Qtde. de Pontos e HORÁRIO vazio
                     qtde_pontos = calcular_qtde_pontos(df_raw)
@@ -360,14 +362,13 @@ if uploaded_file is not None:
                         "ORDEM": list(range(1, qtde_pontos + 1)),
                         "HORÁRIO": ["" for _ in range(qtde_pontos)]
                     })
-                    st.markdown("#### 🗂️ PE.PA.")
-                    st.dataframe(df_extra, use_container_width=True, hide_index=True)
-
+                
     except Exception as e:
         st.exception(e)
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
