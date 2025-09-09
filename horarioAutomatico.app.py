@@ -92,6 +92,7 @@ def montar_excel_somente_agenda(agenda: pd.DataFrame) -> bytes:
     return bio.read()
 
 def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
+    global modo_gaps, horarios_gaps
     def horario_para_minutos(hhmm: str) -> int:
         partes = hhmm.split(':')
         return int(partes[0]) * 60 + int(partes[1]) if len(partes) == 2 else -1
@@ -157,6 +158,7 @@ def construir_tabelas_por_dia(df_raw: pd.DataFrame) -> dict:
             df_dia.loc[df_dia[hcol] == maior, f'OBS{dia}'] = 'Maior Horário'
 
         horarios_minutos = df_dia[hcol].apply(horario_para_minutos).tolist()
+        if modo_gaps.get(dia, True):
         for i in range(1, len(horarios_minutos)):
             diff = horarios_minutos[i] - horarios_minutos[i-1]
             if diff > 10:
@@ -236,7 +238,27 @@ def tabela_min_max_horarios(df_raw: pd.DataFrame) -> pd.DataFrame:
     Retorna uma tabela com: Coluna, Menor horário, Maior horário, Jornada
     Busca os horários diretamente das colunas HORARIOXXX correspondentes às linhas onde OBSXXX contém 'Menor Horário' ou 'Maior Horário'.
     """
-    tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+    
+# === Adaptação: Controle de Gaps por Dia ===
+modo_gaps = {}
+horarios_gaps = {}
+
+for dia in DIAS:
+    st.markdown(f"### {dia}")
+    modo_automatico = st.checkbox(f"Marcar gaps automaticamente ({dia})", value=True, key=f"auto_{dia}")
+    modo_gaps[dia] = modo_automatico
+
+    if not modo_automatico:
+        col1, col2 = st.columns(2)
+        with col1:
+            antes = st.text_input(f"Horário antes do gap ({dia})", key=f"antes_{dia}")
+        with col2:
+            depois = st.text_input(f"Horário depois do gap ({dia})", key=f"depois_{dia}")
+        horarios_gaps[dia] = (antes.strip(), depois.strip())
+    else:
+        horarios_gaps[dia] = ("", "")
+
+tabelas_por_dia = construir_tabelas_por_dia(df_raw)
     out = []
 
     for dia in DIAS:
@@ -320,7 +342,27 @@ if uploaded_file is not None:
 
         # 5) Prévia completa por dia (somente válidos)
         st.markdown("### 📋 Prévia por dia")
-        tabelas_por_dia = construir_tabelas_por_dia(df_raw)
+        
+# === Adaptação: Controle de Gaps por Dia ===
+modo_gaps = {}
+horarios_gaps = {}
+
+for dia in DIAS:
+    st.markdown(f"### {dia}")
+    modo_automatico = st.checkbox(f"Marcar gaps automaticamente ({dia})", value=True, key=f"auto_{dia}")
+    modo_gaps[dia] = modo_automatico
+
+    if not modo_automatico:
+        col1, col2 = st.columns(2)
+        with col1:
+            antes = st.text_input(f"Horário antes do gap ({dia})", key=f"antes_{dia}")
+        with col2:
+            depois = st.text_input(f"Horário depois do gap ({dia})", key=f"depois_{dia}")
+        horarios_gaps[dia] = (antes.strip(), depois.strip())
+    else:
+        horarios_gaps[dia] = ("", "")
+
+tabelas_por_dia = construir_tabelas_por_dia(df_raw)
 
         if tabelas_por_dia:
             for dia in DIAS:
@@ -382,16 +424,3 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
-
-
-
-
-
-
-
-
-
-
-
-
-
