@@ -326,11 +326,81 @@ st.caption("Faça upload da planilha (.xlsx) do setor. O app usa automaticamente
 uploaded_file = st.file_uploader("Selecione a planilha do setor (formato .xlsx)", type=["xlsx"])
 
 if uploaded_file is not None:
-    try:
-        # 1) Carregar a aba correta e o df_raw
-        xls = pd.ExcelFile(uploaded_file)
-        aba_dados = selecionar_aba_dados(xls)  # escolhe automaticamente a aba de dados
-        df_raw = pd.read_excel(uploaded_file, sheet_name=aba_dados)
+    xls = pd.ExcelFile(uploaded_file)
+    aba_dados = xls.sheet_names[0]
+    df_raw = pd.read_excel(xls, sheet_name=aba_dados)
+
+    DIAS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM']
+    dias_com_horarios = []
+
+    # Verifica quais dias têm horários válidos
+    for dia in DIAS:
+        hcol = f'HORARIO{dia}'
+        if hcol in df_raw.columns:
+            horarios = df_raw[hcol].astype(str).str.strip()
+            if horarios.ne('').any():
+                dias_com_horarios.append(dia)
+
+    # Interface para o usuário informar os gaps
+    st.markdown("### 🕳️ Gaps manuais por dia")
+    horarios_gap_por_dia = {}
+
+    for dia in dias_com_horarios:
+        with st.expander(f"Definir gaps para {dia}"):
+            horarios_gap = []
+            num_gaps = st.number_input(f"Número de gaps para {dia}", min_value=0, max_value=10, value=0, key=f"num_{dia}")
+            for i in range(num_gaps):
+                col1, col2 = st.columns(2)
+                antes = col1.text_input(f"Horário antes do gap {i+1}", key=f"{dia}_antes_{i}")
+                depois = col2.text_input(f"Horário depois do gap {i+1}", key=f"{dia}_depois_{i}")
+                if antes and depois:
+                    horarios_gap.append((antes.strip(), depois.strip()))
+            if horarios_gap:
+                horarios_gap_por_dia[dia] = horarios_gap
+
+    # Aplica os gaps na coluna OBS e prepara PE.PA.
+    tabelas_pepa = {}
+    for dia in dias_com_horarios:
+        hcol = f'HORARIO{dia}'
+        ocol = f'ORDEM{dia}'
+        obs_col = f'OBS{dia}'
+
+        horarios = df_raw[hcol].astype(str).str.strip()
+        ordens = pd.to_numeric(df_raw[ocol], errors='coerce').astype('Int64')
+        df_dia = pd.DataFrame({hcol: horarios, ocol: ordens})
+        df_dia[obs_col] = ''
+
+        if dia in horarios_gap_por_dia:
+            for idx, linha in df_dia.iterrows():
+                horario = linha[hcol]
+                for antes, depois in horarios_gap_por_dia[dia]:
+                    if horario == antes or horario == depois:
+                        df_dia.at[idx, obs_col] += 'GAP'
+
+        # Cria a tabela PE.PA.
+        qtde_pontos = ordens.notna().sum()
+        df_pepa = pd.DataFrame({
+            "ORDEM": list(range(1, qtde_pontos + 1)),
+            "HORÁRIO": ["" for _ in range(qtde_pontos)]
+        })
+
+        # Preenche os GAPs
+        gaps = df_dia[df_dia[obs_col].str.contains("GAP", na=False)]
+        for _, row in gaps.iterrows():
+            ordem_gap = row[ocol]
+            horario_gap = row[hcol]
+            if pd.notna(ordem_gap) and pd.notna(horario_gap):
+                idx = int(ordem_gap) - 1
+                if 0 <= idx < len(df_pepa):
+                    df_pepa.at[idx, "HORÁRIO"] = horario_gap
+
+        tabelas_pepa[dia] = df_pepa
+
+    # Exibe as tabelas PE.PA.
+    for dia in dias_com_horarios:
+        st.markdown(f"#### 📅 PE.PA. - {dia}")
+        st.dataframe(tabelas_pepa[dia], use_container_width=True, hide_index=True)
+
 
         # 2) Processamento (sem alterar df_raw; sem colunas extras)
         agenda = processar_df_sem_mutar(df_raw)
@@ -408,6 +478,7 @@ if uploaded_file is not None:
         st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
 else:
     st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
 
 
