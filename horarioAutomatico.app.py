@@ -473,9 +473,10 @@ if uploaded_file is not None:
                         "HORÁRIO": ["" for _ in range(qtde_pontos)]
                     })
                 
-except Exception as e:
-    st.exception(e)
-    st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
-else:
-    st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+    except Exception as e:
+        st.exception(e)
+        st.error("Erro ao processar a prévia. Verifique o arquivo e o layout (HORARIO*/ORDEM*).")
+    else:
+        st.info("👉 Faça o upload de um arquivo .xlsx para começar.")
+
 
